@@ -1,0 +1,7 @@
+import test from'node:test';import assert from'node:assert/strict';import{estimateCost,providers,route}from'../src/economics.js';
+const base={capability:'task.search',semantics:'teamspace-v1',write:false,freshness:'live' as const,residency:'us' as const,maxLatencyMs:500,maxCostMicros:100,mode:'realtime' as const};
+test('router chooses cheapest provider satisfying every hard constraint',()=>assert.equal(route(base,providers).selected?.id,'teamspace-standard-us'));
+test('router does not substitute a semantically different tool',()=>{const d=route({...base,semantics:'missing'},providers);assert.equal(d.selected,undefined);assert.ok(d.rejected.every(x=>x.reason==='semantic contract mismatch'||x.reason==='capability mismatch'))});
+test('write routing requires an explicitly write-capable provider',()=>assert.equal(route({...base,write:true},providers).selected?.id,'teamspace-priority-us'));
+test('slow task lane is selected only when requested and allowed',()=>assert.equal(route({...base,capability:'page.search',freshness:'stale-ok',residency:'eu',mode:'task',maxLatencyMs:10000,maxCostMicros:10},providers).selected?.id,'teamspace-batch-eu'));
+test('cost model separates vendor infrastructure from client model cost',()=>{const c=estimateCost({calls:10,wrapperMicros:2,backendMicros:8,vendorModelMicros:0,clientInputTokens:1000,clientOutputTokens:0,clientMicrosPerMillionInput:1000000,clientMicrosPerMillionOutput:0});assert.equal(c.vendorTotal,100);assert.equal(c.clientModel,1000);assert.equal(c.total,1100)});

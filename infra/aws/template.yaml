@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Optional MCP 103 App Runner teaching deployment
+Parameters:
+  ImageUri: { Type: String }
+  DatabaseSecretArn: { Type: String }
+Resources:
+  AccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{ Effect: Allow, Principal: { Service: build.apprunner.amazonaws.com }, Action: 'sts:AssumeRole' }]
+      Policies:
+        - PolicyName: pull-and-read-secret
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - { Effect: Allow, Action: ['ecr:GetAuthorizationToken'], Resource: '*' }
+              - { Effect: Allow, Action: ['ecr:BatchGetImage','ecr:GetDownloadUrlForLayer','ecr:BatchCheckLayerAvailability'], Resource: '*' }
+              - { Effect: Allow, Action: ['secretsmanager:GetSecretValue'], Resource: { Ref: DatabaseSecretArn } }
+  Service:
+    Type: AWS::AppRunner::Service
+    Properties:
+      SourceConfiguration:
+        AuthenticationConfiguration: { AccessRoleArn: { 'Fn::GetAtt': [AccessRole, Arn] } }
+        AutoDeploymentsEnabled: false
+        ImageRepository:
+          ImageIdentifier: { Ref: ImageUri }
+          ImageRepositoryType: ECR
+          ImageConfiguration:
+            Port: '3102'
+            RuntimeEnvironmentVariables: { HOST: '0.0.0.0', NODE_ENV: 'production' }
+            RuntimeEnvironmentSecrets: { DATABASE_URL: { Ref: DatabaseSecretArn } }
+Outputs:
+  ServiceUrl: { Value: { 'Fn::GetAtt': [Service, ServiceUrl] } }

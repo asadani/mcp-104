@@ -1,0 +1,12 @@
+import { serveStdio } from '@modelcontextprotocol/server/stdio';
+import { openDb,migrate,seed } from './db.js';
+import { Identity } from './auth.js';
+import { startApi,Downstream,portOf } from './api.js';
+import { createServer } from './mcp.js';
+import { ProductionControls } from './production.js';
+const subject=process.env.TEAMSPACE_SUBJECT??'alice';
+const db=await openDb(process.env.DATABASE_URL??'file://.data/teamspace-stdio');await migrate(db);await seed(db);
+const identity=new Identity('http://localhost');
+const tasks=await startApi('tasks',db,identity,0),knowledge=await startApi('knowledge',db,identity,0);
+const downstream=new Downstream({tasks:`http://127.0.0.1:${portOf(tasks)}`,knowledge:`http://127.0.0.1:${portOf(knowledge)}`},identity);
+serveStdio(()=>createServer(db,downstream,subject,new ProductionControls(db)));
