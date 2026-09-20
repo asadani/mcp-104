@@ -8,6 +8,10 @@ predictions.
 The runnable baseline targets MCP `2026-07-28`, `@modelcontextprotocol/*` v2 and
 Node 22+. Every experiment is deterministic and needs no model key.
 
+## Interactive tutorial
+
+Read the hosted course at **[tech.anujsadani.in/mcp-104](https://tech.anujsadani.in/mcp-104/)**. The repository root is the tutorial page; the runnable economics lab remains available locally at `http://127.0.0.1:5173/app.html`.
+
 ## Run
 
 ```powershell
