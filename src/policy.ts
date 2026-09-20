@@ -45,7 +45,16 @@ export async function once<T>(db: Sql, a: Actor, key: string, input: unknown, wo
   }
   // Product writes use their own stable IDs. A crash between write and recording outcome
   // is surfaced as OUTCOME_UNKNOWN, never blindly replayed. See the recovery lab.
-  const result = await work();
+  // A Fault is a definite, classified refusal (a stale version, a missing approval): nothing was
+  // written, so the claim is released and the caller may retry. Anything else, such as a dropped
+  // connection, leaves the claim in place because the outcome really is unknown.
+  let result: T;
+  try {
+    result = await work();
+  } catch (e) {
+    if (e instanceof Fault) await db.query('DELETE FROM operations WHERE key=$1 AND result IS NULL',[scoped]);
+    throw e;
+  }
   await db.query('UPDATE operations SET result=$2 WHERE key=$1',[scoped,JSON.stringify(result)]);
   return result;
 }

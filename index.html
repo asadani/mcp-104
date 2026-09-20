@@ -1,21 +1,1443 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#15231f">
-  <meta name="description" content="An interactive course on MCP economics, gateways, routing, and futures.">
-  <title>MCP 104 · Economics, gateways and futures</title>
-  <link rel="stylesheet" href="./tutorial.css">
-  <link rel="stylesheet" href="./accessibility.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCP 104 · Economics, gateways and futures</title>
+<meta name="description" content="The economics of an MCP server, tiering, routing between tools that only look alike, gateways, auth brokerage and composition: one implemented router and cost model, and clearly labelled design.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+
+:root{
+  --paper:#EAECE7;
+  --paper-2:#F4F5F1;
+  --paper-3:#DFE3DC;
+  --grid:#D7DCD4;
+  --rule:#C2C9C0;
+  --ink:#141C1A;
+  --ink-2:#4E5B56;
+  --ink-3:#8A968F;
+  --host:#A81B5D;
+  --host-bg:#F7E6EE;
+  --server:#0C6B70;
+  --server-bg:#DFEEEE;
+  --wire:#A05F05;
+  --wire-bg:#F6EBD8;
+  --display:'IBM Plex Sans Condensed','Oswald',system-ui,sans-serif;
+  --body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono','SFMono-Regular',Consolas,'Liberation Mono',monospace;
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  font-family:var(--body);
+  color:var(--ink);
+  background-color:var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:26px 26px;
+  font-size:16px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ---------- layout ---------- */
+.frame{max-width:1180px;margin:0 auto;padding:0 20px 120px}
+.split{display:grid;grid-template-columns:186px minmax(0,1fr);gap:44px;align-items:start}
+
+/* ---------- masthead ---------- */
+.masthead{
+  border-bottom:2px solid var(--ink);
+  padding:46px 0 22px;
+  margin-bottom:40px;
+}
+.partno{
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);display:flex;flex-wrap:wrap;gap:18px;margin-bottom:26px;
+}
+.partno b{color:var(--ink-2);font-weight:500}
+h1.title{
+  font-family:var(--display);font-weight:700;
+  font-size:clamp(46px,9vw,104px);line-height:.92;letter-spacing:-.02em;
+  margin:0 0 6px;text-transform:uppercase;
+}
+h1.title .thin{font-weight:600;color:var(--ink-2)}
+.subtitle{
+  max-width:60ch;font-size:18px;color:var(--ink-2);margin:20px 0 0;
+}
+
+/* legend */
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}
+.key{
+  font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  padding:5px 10px;border:1px solid;border-radius:2px;display:inline-flex;align-items:center;gap:7px;
+}
+.key::before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor}
+.key.host{color:var(--host);border-color:var(--host);background:var(--host-bg)}
+.key.server{color:var(--server);border-color:var(--server);background:var(--server-bg)}
+.key.wire{color:var(--wire);border-color:var(--wire);background:var(--wire-bg)}
+
+/* ---------- rail ---------- */
+.rail{position:sticky;top:20px}
+.rail-title{
+  font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--ink-3);padding-bottom:10px;border-bottom:1px solid var(--rule);margin-bottom:8px;
+}
+.rail a{
+  display:grid;grid-template-columns:26px 1fr;gap:8px;align-items:baseline;
+  text-decoration:none;color:var(--ink-2);padding:5px 0;
+  font-size:13px;line-height:1.35;border-left:2px solid transparent;padding-left:9px;
+  transition:color .15s,border-color .15s;
+}
+.rail a span.n{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.rail a:hover{color:var(--ink)}
+.rail a.on{color:var(--ink);border-left-color:var(--host);font-weight:600}
+.rail a.on span.n{color:var(--host)}
+.rail .grp{
+  font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3);margin:18px 0 4px;padding-left:11px;
+}
+
+/* ---------- chapters ---------- */
+.chapter{padding:8px 0 78px;scroll-margin-top:20px}
+.eyebrow{
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);margin-bottom:12px;display:flex;align-items:center;gap:10px;
+}
+.eyebrow::after{content:"";flex:1;height:1px;background:var(--rule)}
+.chapter h2{
+  font-family:var(--display);font-weight:700;text-transform:uppercase;
+  font-size:clamp(30px,5vw,46px);line-height:1;letter-spacing:-.01em;margin:0 0 18px;
+}
+.chapter h3{
+  font-family:var(--display);font-weight:600;font-size:21px;letter-spacing:.01em;
+  margin:34px 0 10px;text-transform:uppercase;
+}
+.chapter p{max-width:66ch;margin:0 0 16px}
+.lede{font-size:19px;color:var(--ink-2);max-width:62ch}
+.chapter ul,.chapter ol{max-width:64ch;padding-left:20px;margin:0 0 18px}
+.chapter li{margin-bottom:7px}
+code{
+  font-family:var(--mono);font-size:.88em;background:var(--paper-3);
+  padding:1px 5px;border-radius:2px;
+}
+strong{font-weight:600}
+.host-t{color:var(--host);font-weight:600}
+.server-t{color:var(--server);font-weight:600}
+.wire-t{color:var(--wire);font-weight:600}
+
+/* ---------- spec block (datasheet definition) ---------- */
+.spec{
+  position:relative;background:var(--paper-2);border:1px solid var(--ink);
+  padding:26px 24px 22px;margin:26px 0;max-width:70ch;
+}
+.spec::before{
+  content:attr(data-label);position:absolute;top:-1px;left:-1px;
+  background:var(--ink);color:var(--paper-2);
+  font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+  padding:3px 9px;
+}
+.spec p{margin:0}
+.spec p+p{margin-top:12px}
+.spec.thin{border-style:dashed;background:transparent}
+
+/* ---------- panels & controls ---------- */
+.panel{
+  background:var(--paper-2);border:1px solid var(--rule);margin:28px 0;
+}
+.panel-hd{
+  display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
+  padding:11px 16px;border-bottom:1px solid var(--rule);background:var(--paper-3);
+}
+.panel-hd h4{
+  margin:0;font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-2);font-weight:500;
+}
+.panel-bd{padding:20px 16px}
+
+button{font-family:var(--body);font-size:13px;cursor:pointer}
+.btn{
+  background:var(--ink);color:var(--paper-2);border:1px solid var(--ink);
+  padding:7px 15px;border-radius:2px;font-weight:500;letter-spacing:.01em;
+  transition:opacity .15s;
+}
+.btn:hover{opacity:.85}
+.btn:disabled{opacity:.28;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.ghost:hover{background:var(--paper-3);opacity:1}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--host);outline-offset:2px}
+
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:2px;overflow:hidden;background:var(--paper-2)}
+.seg button{
+  border:0;background:transparent;padding:7px 13px;color:var(--ink-2);
+  font-family:var(--mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+  border-right:1px solid var(--rule);
+}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper-2)}
+
+/* ---------- code frames ---------- */
+pre.frame-json{
+  font-family:var(--mono);font-size:12.5px;line-height:1.6;
+  background:var(--paper-2);border:1px solid var(--rule);border-left-width:3px;
+  padding:13px 15px;margin:0;overflow-x:auto;white-space:pre;color:var(--ink);
+}
+pre.frame-json.from-host{border-left-color:var(--host)}
+pre.frame-json.from-server{border-left-color:var(--server)}
+pre.frame-json.from-model{border-left-color:var(--wire)}
+.frame-tag{
+  font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+  margin:0 0 5px;display:flex;gap:8px;align-items:center;
+}
+.frame-tag.from-host{color:var(--host)}
+.frame-tag.from-server{color:var(--server)}
+.frame-tag.from-model{color:var(--wire)}
+.stack>*+*{margin-top:16px}
+
+/* ---------- tables ---------- */
+.tbl-wrap{overflow-x:auto;margin:26px 0;border:1px solid var(--rule);background:var(--paper-2)}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:14px}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--rule);vertical-align:top}
+thead th{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--ink-2);background:var(--paper-3);font-weight:500;
+}
+tbody tr:last-child td{border-bottom:0}
+td.lbl{font-weight:600;width:23%}
+
+/* ---------- misc ---------- */
+.callout{
+  border-left:3px solid var(--wire);background:var(--wire-bg);
+  padding:15px 18px;margin:24px 0;max-width:68ch;
+}
+.callout p{margin:0}
+.callout .tag{
+  font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--wire);display:block;margin-bottom:5px;
+}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin:24px 0}
+.card{background:var(--paper-2);border:1px solid var(--rule);padding:16px}
+.card h5{
+  margin:0 0 7px;font-family:var(--display);font-size:16px;text-transform:uppercase;letter-spacing:.02em;
+}
+.card p{font-size:14px;margin:0;color:var(--ink-2)}
+.card.host{border-top:3px solid var(--host)}
+.card.server{border-top:3px solid var(--server)}
+.card.wire{border-top:3px solid var(--wire)}
+svg{max-width:100%;height:auto;display:block}
+.figcap{
+  font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.04em;
+  margin-top:10px;
+}
+
+details.acc{border:1px solid var(--rule);background:var(--paper-2);padding:12px 16px;margin-bottom:8px;border-radius:2px}
+details.acc summary{cursor:pointer;font-weight:600;font-size:15px;list-style:none}
+details.acc summary::-webkit-details-marker{display:none}
+details.acc summary::before{content:"+ ";color:var(--host);font-family:var(--mono)}
+details.acc[open] summary::before{content:"– "}
+details.acc p{margin:10px 0 0;max-width:64ch;color:var(--ink-2)}
+
+@media (max-width:860px){
+  .split{grid-template-columns:1fr;gap:0}
+  .rail{position:static;margin-bottom:34px;border:1px solid var(--rule);background:var(--paper-2);padding:14px}
+  .rail-inner{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px}
+  .rail .grp{grid-column:1/-1;margin:10px 0 2px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+  html{scroll-behavior:auto}
+}
+
+/* Site header. Every reader-facing page needs a way back to the index: this
+   page is served from tech.anujsadani.in/mcp-101/ and people arrive on it
+   from search and shared links, not only from the site. Absolute URLs so it
+   also works when the file is opened from disk. */
+.sitebar{display:flex;align-items:center;justify-content:space-between;gap:16px;
+ padding:10px 22px;border-bottom:1px solid var(--rule);background:var(--paper-2);
+ font-size:13px;position:sticky;top:0;z-index:50}
+.sitebar a{text-decoration:none;color:var(--ink-2)}
+.sitebar .brand{color:var(--ink);font-weight:600}
+.sitebar .right{display:flex;gap:16px;align-items:center}
+.sitebar a:hover{color:var(--ink)}
+@media print{.sitebar{display:none}}
+
+/* ================= additions for the 102-104 courses ================= */
+/* Contrast: 101's --ink-3 and --wire fall below WCAG AA on the paper tones. Same hues, darker. */
+:root{
+  --ink-3:#56625B;
+  --wire:#8A5104;
+  --prod:#3D5C1F;
+  --prod-bg:#E6EEDB;
+}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.skip{position:absolute;left:-999px;top:8px;background:var(--ink);color:var(--paper-2);padding:8px 14px;z-index:99;font-size:13px}
+.skip:focus{left:8px}
+.split>main{min-width:0}
+.key.prod{color:var(--prod);border-color:var(--prod);background:var(--prod-bg)}
+.card.prod{border-top:3px solid var(--prod)}
+.prod-t{color:var(--prod);font-weight:600}
+.sitebar .series{display:flex;gap:4px;align-items:center;font-family:var(--mono);font-size:11px;letter-spacing:.08em}
+.sitebar .series a{padding:3px 8px;border:1px solid var(--rule);border-radius:2px;color:var(--ink-2)}
+.sitebar .series a[aria-current="page"]{background:var(--ink);color:var(--paper-2);border-color:var(--ink)}
+.sitebar .series a:not([aria-current]):hover{background:var(--paper-3)}
+@media (max-width:640px){.sitebar .series a:not([aria-current]){display:none}}
+
+/* panel titles are h3 in these pages (heading order), styled like 101's h4 */
+.chapter .panel-hd h3.ph{margin:0;font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);font-weight:500}
+.card-h{margin:0 0 7px!important;font-family:var(--display);font-size:16px;text-transform:uppercase;letter-spacing:.02em;font-weight:700;color:var(--ink)!important}
+tbody th.lbl{text-align:left;font-weight:600;width:23%}
+.lede a,.chapter p a,.chapter li a{color:var(--host)}
+
+/* ---------- code excerpts ---------- */
+.cap{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;justify-content:space-between;
+  font-family:var(--mono);font-size:11px;letter-spacing:.04em;background:var(--paper-3);
+  border:1px solid var(--rule);border-bottom:0;padding:6px 12px;margin-top:22px;max-width:100%}
+.cap b{font-weight:600;color:var(--ink)}
+.cap span{color:var(--ink-2)}
+pre.code,.run pre{font-family:var(--mono);font-size:12.5px;line-height:1.6;margin:0 0 20px;overflow-x:auto;white-space:pre;tab-size:2}
+pre.code{background:var(--paper-2);border:1px solid var(--rule);border-left-width:3px;padding:13px 15px;color:var(--ink)}
+pre.code.server{border-left-color:var(--server)}
+pre.code.host{border-left-color:var(--host)}
+pre.code.prod{border-left-color:var(--prod)}
+pre.code.wire{border-left-color:var(--wire)}
+pre code{font-family:inherit;font-size:inherit;background:none;padding:0}
+.t-c{color:var(--ink-3);font-style:italic}
+.t-s{color:var(--server)}
+.t-n{color:var(--wire)}
+.t-k{color:var(--host)}
+.t-p{color:var(--ink);font-weight:500}
+pre:focus-visible{outline:2px solid var(--host);outline-offset:1px}
+.panel-bd pre.code{margin-bottom:0}
+.panel-bd .cap{margin-top:0}
+.panel-bd section+section{margin-top:0}
+
+/* captured terminal output */
+.run{margin:22px 0;border:1px solid var(--ink);background:var(--ink);color:var(--paper-2)}
+.run-hd{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:6px 12px;border-bottom:1px solid #33413d;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:#B7C2BC}
+.run pre{padding:13px 15px;margin:0;color:var(--paper-2);max-height:420px;overflow:auto}
+.run .t-k{color:#F2A6C6}
+
+/* problem callout */
+.callout.bad{border-left-color:var(--host);background:var(--host-bg)}
+.callout.bad .tag{color:var(--host)}
+.callout.ok{border-left-color:var(--server);background:var(--server-bg)}
+.callout.ok .tag{color:var(--server)}
+.callout code{background:rgba(20,28,26,.08)}
+
+/* ---------- trace / stepper ---------- */
+.lanes{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:8px;margin-bottom:18px}
+.lane{border:1.5px solid var(--rule);background:var(--paper-3);padding:8px 10px;text-align:center;transition:background .15s,border-color .15s}
+.lane b{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.lane span{display:block;font-family:var(--mono);font-size:10px;color:var(--ink-3);margin-top:2px}
+.lane.on.host{background:var(--host-bg);border-color:var(--host)}.lane.on.host b,.lane.on.host span{color:var(--host)}
+.lane.on.server{background:var(--server-bg);border-color:var(--server)}.lane.on.server b,.lane.on.server span{color:var(--server)}
+.lane.on.wire{background:var(--wire-bg);border-color:var(--wire)}.lane.on.wire b,.lane.on.wire span{color:var(--wire)}
+.lane.on.prod{background:var(--prod-bg);border-color:var(--prod)}.lane.on.prod b,.lane.on.prod span{color:var(--prod)}
+.steps{list-style:none;padding:0;margin:0;max-width:none}
+.steps>li{border-top:1px solid var(--rule);padding:12px 0}
+.steps .st{font-weight:600;margin:0 0 4px}
+.steps .sd{margin:0 0 10px;color:var(--ink-2)}
+.fr+.fr{margin-top:12px}
+.tv-count{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.06em;margin:0 0 4px}
+.tv-title{font-family:var(--display);font-weight:600;font-size:19px;text-transform:uppercase;margin:0 0 6px}
+.tv-desc{margin:0 0 6px!important;color:var(--ink-2);max-width:64ch}
+.tv-badge{margin:0 0 14px!important}
+.tap{border:1px solid var(--rule);background:var(--paper-2)}
+.tap-hd{padding:8px 13px;border-bottom:1px solid var(--rule);background:var(--paper-3);font-family:var(--mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-2)}
+.tap-bd{max-height:360px;overflow-y:auto;padding:13px}
+.tap-bd .fr.old{opacity:.6}
+.tap-bd .fr+.fr,.tap-bd .grp-step+.grp-step{margin-top:14px}
+.tap-bd .empty{margin:0}
+.js .steps{display:none}
+.ctl{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ---------- simulators ---------- */
+.fields{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:flex-end;margin-bottom:16px}
+.field{display:flex;flex-direction:column;gap:4px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink-2)}
+.field input[type=text],.field input[type=number],.field select{font-family:var(--mono);font-size:13px;padding:6px 8px;border:1px solid var(--ink-3);background:var(--paper-2);color:var(--ink);border-radius:2px;min-width:140px}
+.field input[type=range]{accent-color:var(--host);width:190px}
+.field output{color:var(--ink);font-weight:600}
+.readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);margin:14px 0}
+.readout>div{background:var(--paper-2);padding:10px 12px}
+.readout small{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-bottom:3px}
+.readout strong{font-family:var(--display);font-size:22px;font-weight:700;letter-spacing:.01em}
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;padding:3px 9px;border:1px solid;border-radius:2px}
+.chip::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
+.chip.ok{color:var(--server);background:var(--server-bg)}
+.chip.no{color:var(--host);background:var(--host-bg)}
+.chip.warn{color:var(--wire);background:var(--wire-bg)}
+.chip.info{color:var(--ink-2);background:var(--paper-3)}
+.log{list-style:none;margin:12px 0 0;padding:0;max-width:none;border:1px solid var(--rule);background:var(--paper-2);max-height:300px;overflow-y:auto;font-family:var(--mono);font-size:12px}
+.log li{padding:6px 12px;border-bottom:1px solid var(--rule);margin:0;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline}
+.log li:last-child{border-bottom:0}
+.log .t{color:var(--ink-3);min-width:56px}
+.mini{width:100%;min-width:0;font-family:var(--mono);font-size:12px;border:1px solid var(--rule);background:var(--paper-2);margin:8px 0}
+.mini caption{caption-side:top;text-align:left;font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);padding:0 0 4px}
+.mini th,.mini td{padding:5px 10px;font-size:12px}
+.mini thead th{font-size:10px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.sim .btn+.btn{margin-left:0}
+.bar{height:10px;background:var(--paper-3);border:1px solid var(--rule);position:relative;margin:4px 0 10px}
+.bar>i{position:absolute;left:0;top:0;bottom:0;background:var(--server)}
+.bar>i.b2{background:var(--wire)}
+
+/* ---------- quiz ---------- */
+.qz-tools{display:flex;gap:10px;align-items:center}
+.qz-score{font-family:var(--mono);font-size:11px;color:var(--ink-2)}
+.qz-q{padding:0 0 20px;margin:0 0 20px;border-bottom:1px solid var(--rule)}
+.qz-q:last-child{border-bottom:0;margin-bottom:0;padding-bottom:0}
+.qz-t{font-weight:600;margin:0 0 10px;max-width:68ch}
+.qz-o{display:grid;gap:6px;max-width:68ch}
+.qz-o button{text-align:left;font-family:var(--body);font-size:14px;padding:9px 12px;border:1px solid var(--rule);background:var(--paper-2);color:var(--ink);border-radius:2px;line-height:1.45}
+.qz-o button:hover:not(:disabled){border-color:var(--ink)}
+.qz-o button:disabled{cursor:default}
+.qz-o button.pick{border-color:var(--ink);border-width:2px}
+.qz-o button.right{background:var(--server-bg);border-color:var(--server)}
+.qz-o button.wrong{background:var(--host-bg);border-color:var(--host)}
+.qz-why{margin:10px 0 0!important;padding:10px 14px;border-left:3px solid var(--wire);background:var(--wire-bg);max-width:68ch;font-size:14px}
+.qz-why b{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase}
+
+/* ---------- footer ---------- */
+.nextcourse{margin-top:34px;padding:22px 24px;border:1px solid var(--ink);background:var(--paper-2);display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap}
+.nextcourse small{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.nextcourse strong{font-family:var(--display);font-size:24px;text-transform:uppercase}
+.nextcourse a{background:var(--ink);color:var(--paper-2);padding:9px 16px;text-decoration:none;font-size:14px;border-radius:2px}
+.nextcourse a:hover{opacity:.85}
+.repomap{font-family:var(--mono);font-size:12.5px}
+pre.frame-json.from-prod{border-left-color:var(--prod)}
+.frame-tag.from-prod{color:var(--prod)}
+.frame-tag{margin-top:0}
+pre.frame-json{max-height:420px;overflow:auto}
+figure{margin:0}
+.arch{display:block;width:100%;max-width:800px;margin:6px 0}
+.arch-v{display:none;max-width:400px;margin:6px auto}
+@media (max-width:640px){.arch-h{display:none}.arch-v{display:block}}
+.arch .al{font-family:var(--mono);font-size:12px;fill:var(--ink-2);letter-spacing:.02em;paint-order:stroke;stroke:var(--paper);stroke-width:4px;stroke-linejoin:round}
+</style>
 </head>
 <body>
-  <a class="skip" href="#lesson">Skip to lesson</a>
-  <header class="site-head">
-    <a class="brand" href="https://tech.anujsadani.in/">ANUJ SADANI <span>/ TECH</span></a>
-    <nav aria-label="Course links"><a id="source-link" href="#">Source ↗</a><a id="previous-link" href="#">← Previous</a><a id="next-link" href="#">Next →</a></nav>
-  </header>
-  <div id="course-root"></div>
-  <script type="module" src="./tutorial.js"></script>
+<a class="skip" href="#main">Skip to the course</a>
+<nav class="sitebar" aria-label="Site">
+  <a class="brand" href="https://tech.anujsadani.in/">Anuj Sadani | Tech</a>
+  <span class="series" role="group" aria-label="Course series"><span style="color:var(--ink-3);margin-right:4px">MCP</span><a href="https://tech.anujsadani.in/mcp-101/">101</a><a href="https://tech.anujsadani.in/mcp-102/">102</a><a href="https://tech.anujsadani.in/mcp-103/">103</a><a href="https://tech.anujsadani.in/mcp-104/" aria-current="page">104</a></span>
+  <span class="right">
+    <a href="https://github.com/asadani/mcp-104" target="_blank" rel="noopener">Source &nearr;</a>
+    <a href="https://tech.anujsadani.in/">&larr; index</a>
+  </span>
+</nav>
+
+<div class="frame">
+
+<header class="masthead">
+  <div class="partno">
+    <span><b>DOC</b> MCP-104</span>
+    <span><b>SCOPE</b> Economics → Architecture</span>
+    <span><b>PREREQ</b> MCP 103</span>
+    <span><b>PROTOCOL</b> 2026-07-28</span>
+    <span><b>READ</b> ~60 min</span>
+  </div>
+  <h1 class="title">Economics,<br>gateways <span class="thin">&amp; futures</span></h1>
+  <p class="subtitle">MCP 103 made the server survive. This course asks what it costs, who should serve which request, and where the gateways, catalogues and model-backed tools people propose actually fit. One mechanism is implemented and tested; the rest is argued, and every chapter says which is which.</p>
+  <div class="legend">
+    <span class="key host">Host &amp; client</span>
+    <span class="key server">MCP server</span>
+    <span class="key wire">Model</span>
+    <span class="key prod">Product system</span>
+  </div>
+</header>
+
+<div class="split">
+
+<nav class="rail" aria-label="Chapters">
+  <div class="rail-title">Contents</div>
+  <div class="rail-inner">
+    <div class="grp">Groundwork</div>
+    <a href="#ch00"><span class="n">00</span><span>Where 103 left off</span></a>
+    <div class="grp">The economics</div>
+    <a href="#ch01"><span class="n">01</span><span>The cost stack</span></a>
+    <a href="#ch02"><span class="n">02</span><span>Tiering</span></a>
+    <a href="#ch03"><span class="n">03</span><span>Async economics</span></a>
+    <div class="grp">Routing and gateways</div>
+    <a href="#ch04"><span class="n">04</span><span>Gateways</span></a>
+    <a href="#ch05"><span class="n">05</span><span>Tool retrieval</span></a>
+    <a href="#ch06"><span class="n">06</span><span>Semantic routing</span></a>
+    <a href="#ch07"><span class="n">07</span><span>Auth brokerage</span></a>
+    <div class="grp">Composition and the future</div>
+    <a href="#ch08"><span class="n">08</span><span>A model inside a tool</span></a>
+    <a href="#ch09"><span class="n">09</span><span>Server composition</span></a>
+    <a href="#ch10"><span class="n">10</span><span>A forecast, with triggers</span></a>
+    <div class="grp">Check yourself</div>
+    <a href="#ch11"><span class="n">11</span><span>Check yourself</span></a>
+  </div>
+</nav>
+
+<main id="main">
+
+<!-- ============ 00 ============ -->
+<section class="chapter" id="ch00">
+  <div class="eyebrow">Chapter 00 · Groundwork</div>
+  <h2>Where 103 left off</h2>
+  <p class="lede">MCP 103 made the server survive. MCP 104 asks what it costs, who should serve which request, and where the gateways and model-backed tools people are proposing actually fit.</p>
+
+  <p>Start from the finished system in MCP 103. This repository adds one small file, <code>src/economics.ts</code>, about twenty-five lines, plus one tool and one endpoint. That file holds two functions and a table: a <em>cost model</em>, a <em>router</em>, and four <em>providers</em> for the router to choose between. Everything the rest of this course argues is tested against those, or is labelled as design where the repository has nothing to run.</p>
+  <div class="callout"><span class="tag">Read this first</span><p>Most of MCP 104 is a set of design arguments, not code. One mechanism is implemented and tested (the router and cost model). Four chapters describe things this repository does not contain: a gateway, a tool catalogue, credential brokerage and a model inside a tool. Every chapter opens with a box saying which it is, and the frames in the design chapters are sketches, marked as such. Where a number comes from the repo’s lab it is <em>a placeholder chosen by the author</em>, not a measurement. Replace them with yours before drawing any conclusion.</p></div>
+  <div class="tbl-wrap"><table><thead><tr><th scope="col">Chapter</th><th scope="col">Topic</th><th scope="col">What the repo has</th></tr></thead><tbody><tr><th scope="row" class="lbl">01</th><td>The cost stack</td><td><span class="chip ok">implemented</span> <code>estimateCost()</code></td></tr><tr><th scope="row" class="lbl">02</th><td>Tiering</td><td><span class="chip ok">implemented</span> providers and <code>route()</code></td></tr><tr><th scope="row" class="lbl">03</th><td>Async economics</td><td><span class="chip warn">partly</span> the batch provider here; the job table and worker are in 103</td></tr><tr><th scope="row" class="lbl">04</th><td>Gateways</td><td><span class="chip info">design</span> only <code>explain_route</code> exists</td></tr><tr><th scope="row" class="lbl">05</th><td>Tool retrieval</td><td><span class="chip info">design</span> a toy demo on the real tool list</td></tr><tr><th scope="row" class="lbl">06</th><td>Semantic routing</td><td><span class="chip ok">implemented</span> the semantic check in <code>route()</code></td></tr><tr><th scope="row" class="lbl">07</th><td>Auth brokerage</td><td><span class="chip info">design</span></td></tr><tr><th scope="row" class="lbl">08</th><td>Model inside a tool</td><td><span class="chip info">design</span> cost effect only</td></tr><tr><th scope="row" class="lbl">09</th><td>Server composition</td><td><span class="chip warn">partly</span> <code>nextHop()</code>, used by one tool in 103</td></tr><tr><th scope="row" class="lbl">10</th><td>Forecast</td><td><span class="chip info">hypotheses</span></td></tr></tbody></table></div>
+
+  <h3>The four providers</h3>
+  <p>The router has something to choose between because <code>economics.ts</code> declares four execution providers. They are data, not running services. Each states what it can do, how fast and how expensive it is, and what contract it obeys:</p>
+  <div class="cap"><b>src/economics.ts</b><span>providers: the router’s whole world</span></div><pre class="code server" tabindex="0"><code><span class="t-k">export</span> <span class="t-k">const</span> providers: Provider[] = [
+  {
+    id: <span class="t-s">'teamspace-standard-us'</span>,
+    vendor: <span class="t-s">'teamspace'</span>,
+    capabilities: [<span class="t-s">'task.search'</span>, <span class="t-s">'page.search'</span>],
+    semantics: <span class="t-s">'teamspace-v1'</span>,
+    writes: <span class="t-k">false</span>,
+    freshness: <span class="t-s">'live'</span>,
+    residency: <span class="t-s">'us'</span>,
+    mode: <span class="t-s">'realtime'</span>,
+    p95Ms: <span class="t-n">450</span>,
+    costMicros: <span class="t-n">20</span>,
+    available: <span class="t-k">true</span>,
+    trust: <span class="t-s">'verified'</span>,
+  },
+  {
+    id: <span class="t-s">'teamspace-priority-us'</span>,
+    vendor: <span class="t-s">'teamspace'</span>,
+    capabilities: [<span class="t-s">'task.search'</span>, <span class="t-s">'page.search'</span>, <span class="t-s">'task.write'</span>],
+    semantics: <span class="t-s">'teamspace-v1'</span>,
+    writes: <span class="t-k">true</span>,
+    freshness: <span class="t-s">'live'</span>,
+    residency: <span class="t-s">'us'</span>,
+    mode: <span class="t-s">'realtime'</span>,
+    p95Ms: <span class="t-n">120</span>,
+    costMicros: <span class="t-n">90</span>,
+    available: <span class="t-k">true</span>,
+    trust: <span class="t-s">'verified'</span>,
+  },
+  {
+    id: <span class="t-s">'teamspace-batch-eu'</span>,
+    vendor: <span class="t-s">'teamspace'</span>,
+    capabilities: [<span class="t-s">'page.search'</span>],
+    semantics: <span class="t-s">'teamspace-v1'</span>,
+    writes: <span class="t-k">false</span>,
+    freshness: <span class="t-s">'cached'</span>,
+    residency: <span class="t-s">'eu'</span>,
+    mode: <span class="t-s">'task'</span>,
+    p95Ms: <span class="t-n">8000</span>,
+    costMicros: <span class="t-n">4</span>,
+    available: <span class="t-k">true</span>,
+    trust: <span class="t-s">'verified'</span>,
+  },
+  {
+    id: <span class="t-s">'lookalike-fast'</span>,
+    vendor: <span class="t-s">'other'</span>,
+    capabilities: [<span class="t-s">'task.search'</span>],
+    semantics: <span class="t-s">'other-v2'</span>,
+    writes: <span class="t-k">false</span>,
+    freshness: <span class="t-s">'live'</span>,
+    residency: <span class="t-s">'us'</span>,
+    mode: <span class="t-s">'realtime'</span>,
+    p95Ms: <span class="t-n">60</span>,
+    costMicros: <span class="t-n">2</span>,
+    available: <span class="t-k">true</span>,
+    trust: <span class="t-s">'verified'</span>,
+  },
+];</code></pre>
+  <div class="tbl-wrap"><table><thead><tr><th scope="col">Provider</th><th scope="col">Can do</th><th scope="col">Writes</th><th scope="col">Data</th><th scope="col">Mode</th><th scope="col">p95</th><th scope="col">Cost</th><th scope="col">Contract</th></tr></thead><tbody><tr><th scope="row" class="lbl"><code>teamspace-standard-us</code></th><td>task + page search</td><td>no</td><td>live, US</td><td>realtime</td><td>450 ms</td><td>20</td><td><code>teamspace-v1</code></td></tr><tr><th scope="row" class="lbl"><code>teamspace-priority-us</code></th><td>search + task write</td><td>yes</td><td>live, US</td><td>realtime</td><td>120 ms</td><td>90</td><td><code>teamspace-v1</code></td></tr><tr><th scope="row" class="lbl"><code>teamspace-batch-eu</code></th><td>page search only</td><td>no</td><td>cached, EU</td><td>task</td><td>8000 ms</td><td>4</td><td><code>teamspace-v1</code></td></tr><tr><th scope="row" class="lbl"><code>lookalike-fast</code></th><td>task search</td><td>no</td><td>live, US</td><td>realtime</td><td>60 ms</td><td>2</td><td><code>other-v2</code></td></tr></tbody></table></div>
+  <p>Cost is in <em>micros</em>: millionths of a currency unit per call. Notice that the fourth provider is the cheapest and the fastest. It is there to be a trap, and Chapter 06 shows why the router refuses it.</p>
+
+  <h3>The new surface, and the old findings</h3>
+  <p>The MCP surface gains one tool, <code>explain_route</code>. The HTTP API gains <code>/api/economics</code>, which returns the lab’s default experiment for an authenticated caller. The tests grow from thirty-five in MCP 103 to forty-one: five on the router and cost model, and one that drives <code>explain_route</code> through the MCP server.</p>
+  <div class="run"><div class="run-hd"><span>Captured run</span><span>captured 2026-09-20 · forty-one tests, all passing</span></div><pre tabindex="0"><code><span class="t-k">$ </span>npm test
+✔ an unreachable product API opens the circuit, and calls stop reaching it
+✔ a definite refusal from a healthy dependency is not an outage
+✔ tenant and team scope known identifiers
+✔ viewer cannot mutate
+✔ idempotency returns same result and rejects changed arguments
+✔ optimistic version rejects stale write
+✔ approval is actor and exact-operation bound and single use
+✔ router chooses cheapest provider satisfying every hard constraint
+✔ router does not substitute a semantically different tool
+✔ write routing requires an explicitly write-capable provider
+✔ slow task lane is selected only when requested and allowed
+✔ cost model separates vendor infrastructure from client model cost
+✔ the address check refuses internal space, including IPv4-mapped IPv6 and shared space
+✔ a viewer cannot queue a job, and a member on the free plan gets PLAN_REQUIRED
+✔ job tools use the same pipeline: a structured error and an audit row
+✔ a successful job call is audited too
+✔ the job tools now spend rate-limit permits, and throttling is audited as throttled
+✔ explain_route goes through the pipeline: it is audited and returns structured content
+✔ draft_release_note carries one deadline, budget and route through both internal hops
+✔ the /mcp edge answers 401 with a WWW-Authenticate challenge, never a 500
+✔ a refused write releases its key, so the same key can be used again
+✔ publishing without an approval does not burn the operation key
+✔ an unclassified failure keeps the claim, because the outcome really is unknown
+✔ a completed operation is replayed and its work is not run twice
+✔ MCP discovery, tool call and resource read work end to end
+✔ a reservation that is never settled expires and frees its hold
+✔ a reservation is a ceiling: settlement never charges more than was reserved
+✔ a worker runs a release-report job for its owner, scoped to the owner’s team
+✔ a slow worker cannot complete a job that another worker has taken over
+✔ a job that keeps failing is retried, then dead-lettered with its reason
+✔ a job whose worker keeps crashing is dead-lettered instead of re-leased forever
+✔ the token bucket is shared: two replicas draw from one allowance
+✔ the token bucket refills over time
+✔ one member cannot hold every slot their organisation has
+✔ production refuses to start without its required settings, and says which is missing
+✔ rate limits per actor and releases org concurrency
+✔ budget reservation is atomic and reconciled
+✔ jobs are scoped, leased and completed durably
+✔ URL validation blocks private networks
+✔ composite hop prevents cycles, excess depth and budget overrun
+✔ a refused resource read is a structured not-found, the same as a page that does not exist
+ℹ tests 41
+ℹ pass 41
+ℹ fail 0</code></pre></div>
+  <p><code>src/production.ts</code> is byte-for-byte the file from MCP 103, so everything that course built and fixed applies here unchanged: the shared token bucket, expiring budget holds, the job worker, the wired-in circuit breaker and the numeric address check. This course does not repeat it.</p>
+
+</section>
+
+<!-- ============ 01 ============ -->
+<section class="chapter" id="ch01">
+  <div class="eyebrow">Chapter 01 · The economics</div>
+  <h2>The cost stack</h2>
+  <p class="lede">An MCP server is not free to run, and it is not where most of the money goes. Both statements are true, and the difference between them is the interesting part.</p>
+
+  <div class="callout ok"><span class="tag">In the repo</span><p><code>estimateCost()</code> and its lab are in <code>src/economics.ts</code> and tested. The numbers fed to it are placeholders.</p></div>
+  <p>When someone asks &ldquo;what does it cost to run our MCP server?&rdquo;, they usually picture one line: the compute for the wrapper. There are at least eight, and they scale differently:</p>
+  <ul>
+    <li><strong>Edge and wrapper compute</strong>: the process that receives the request, verifies the token and translates it.</li>
+    <li><strong>Product API work</strong>: the actual query or business logic behind the tool. Usually the largest server-side line.</li>
+    <li><strong>Storage and search</strong>, and <strong>outbound traffic</strong>.</li>
+    <li><strong>Observability</strong>: logs, metrics and traces, which grow with call volume.</li>
+    <li><strong>Abuse control</strong>: the limits, budgets and scanning of MCP 103.</li>
+    <li><strong>Support</strong>: humans explaining why a call was refused.</li>
+    <li><strong>A model, if the tool itself calls one</strong> (Chapter 08).</li>
+  </ul>
+  <p>Then there is a second ledger that is not yours. The <em>client’s</em> model reads your tool descriptions, sends arguments and reads results, and bills its own operator for the tokens. The two ledgers are added together in the model below only so you can see their relative size.</p>
+  <div class="cap"><b>src/economics.ts</b><span>estimateCost: two separate ledgers</span></div><pre class="code server" tabindex="0"><code><span class="t-k">export</span> <span class="t-k">function</span> estimateCost(x: CostInput) {
+  <span class="t-k">const</span> vendorPerCall = x.wrapperMicros + x.backendMicros + x.vendorModelMicros;
+  <span class="t-k">const</span> vendorTotal = x.calls * vendorPerCall;
+  <span class="t-k">const</span> clientModel = Math.round(
+    (x.clientInputTokens * x.clientMicrosPerMillionInput) / <span class="t-n">1_000_000</span> +
+      (x.clientOutputTokens * x.clientMicrosPerMillionOutput) / <span class="t-n">1_000_000</span>,
+  );
+  <span class="t-k">return</span> {
+    vendorPerCall,
+    vendorTotal,
+    clientModel,
+    total: vendorTotal + clientModel,
+    shares: {
+      vendor: Number((vendorTotal / (vendorTotal + clientModel || <span class="t-n">1</span>)).toFixed(<span class="t-n">3</span>)),
+      client: Number((clientModel / (vendorTotal + clientModel || <span class="t-n">1</span>)).toFixed(<span class="t-n">3</span>)),
+    },
+  };
+}</code></pre>
+  <p>Read it as three lines. <code>vendorPerCall</code> is wrapper plus backend plus any model inside the tool. <code>vendorTotal</code> multiplies by call volume. <code>clientModel</code> prices the tokens the <em>caller’s</em> model consumed. The function returns each, the sum, and the two shares.</p>
+  <div class="run"><div class="run-hd"><span>Captured run</span><span>captured 2026-09-20</span></div><pre tabindex="0"><code><span class="t-k">$ </span>npm run lab   (the "cost" part of the baseline)
+{
+  "vendorPerCall": 20,
+  "vendorTotal": 200000,
+  "clientModel": 9000000,
+  "total": 9200000,
+  "shares": {
+    "vendor": 0.022,
+    "client": 0.978
+  }
+}</code></pre></div>
+  <div class="panel sim" data-sim="cost" data-presets="[{&quot;label&quot;:&quot;As in the lab&quot;,&quot;calls&quot;:10000,&quot;wrap&quot;:2,&quot;back&quot;:18,&quot;vmodel&quot;:0,&quot;in&quot;:12,&quot;out&quot;:2,&quot;pin&quot;:500000,&quot;pout&quot;:1500000},{&quot;label&quot;:&quot;A model inside the tool&quot;,&quot;calls&quot;:10000,&quot;wrap&quot;:2,&quot;back&quot;:18,&quot;vmodel&quot;:8000,&quot;in&quot;:12,&quot;out&quot;:2,&quot;pin&quot;:500000,&quot;pout&quot;:1500000},{&quot;label&quot;:&quot;Retries triple the calls&quot;,&quot;calls&quot;:30000,&quot;wrap&quot;:2,&quot;back&quot;:18,&quot;vmodel&quot;:0,&quot;in&quot;:12,&quot;out&quot;:2,&quot;pin&quot;:500000,&quot;pout&quot;:1500000}]"><div class="panel-hd"><h3 class="ph">Interactive · Who spends what</h3><div class="ctl"><button class="btn ghost" type="button" data-p="0">As in the lab</button><button class="btn ghost" type="button" data-p="1">A model inside the tool</button><button class="btn ghost" type="button" data-p="2">Retries triple the calls</button></div></div><div class="panel-bd">
+    <div class="fields">
+      <label class="field">Tool calls<input type="number" class="f-calls" value="10000" min="100" max="10000000" step="1000"></label>
+      <label class="field">Wrapper compute, per call<input type="number" class="f-wrap" value="2" min="0" max="1000" step="1"></label>
+      <label class="field">Product backend, per call<input type="number" class="f-back" value="18" min="0" max="5000" step="1"></label>
+      <label class="field">Model inside the tool, per call<input type="number" class="f-vmodel" value="0" min="0" max="100000" step="100"></label>
+    </div>
+    <div class="fields">
+      <label class="field">Client model input (M tokens)<input type="number" class="f-in" value="12" min="0" max="100000" step="1"></label>
+      <label class="field">Client model output (M tokens)<input type="number" class="f-out" value="2" min="0" max="100000" step="1"></label>
+      <label class="field">Input price, per M tokens<input type="number" class="f-pin" value="500000" min="0" max="100000000" step="50000"></label>
+      <label class="field">Output price, per M tokens<input type="number" class="f-pout" value="1500000" min="0" max="100000000" step="50000"></label>
+    </div>
+    <div class="readout" data-out="read"></div>
+    <div class="bar" aria-hidden="true"><i data-out="bar"></i></div>
+    <p class="figcap" data-out="split"></p>
+    <p class="figcap">All money is in <em>micros</em>, millionths of a currency unit, as in <code>src/economics.ts</code>. A port of <code>estimateCost()</code>. The starting numbers are the ones the repo’s lab uses. They are the author’s placeholders, not measurements. Put in yours.</p>
+  </div></div>
+  <p>With the lab’s placeholders, ten thousand calls cost the vendor 200,000 micros and the client’s model 9,000,000, so the vendor side is about two percent of the total. If micros are millionths of a dollar that is twenty cents against nine dollars. The general shape is the point, not those figures: for a cheap read, the wrapper and the query are small next to the tokens spent deciding to make the call and reading the answer.</p>
+  <p>Then use the presets. <strong>A model inside the tool</strong> changes the picture at once, because now the vendor pays for inference on every call. <strong>Retries triple the calls</strong> multiplies every vendor line by three, and it is worth remembering that an agent can produce that multiplier without a human ever noticing: it retries, fans out, and re-reads. MCP 103’s limits and budgets are what stop that being your bill.</p>
+  <div class="callout"><span class="tag">Units before comparisons</span><p>Never set a vendor micro-cost beside a client token price without a common unit and a workload volume. &ldquo;Twenty micros per call&rdquo; and &ldquo;half a currency unit per million tokens&rdquo; are not comparable until you multiply each by how many calls and tokens a real workflow uses. The function forces that by taking counts as inputs. Change one variable at a time.</p></div>
+
+</section>
+
+<!-- ============ 02 ============ -->
+<section class="chapter" id="ch02">
+  <div class="eyebrow">Chapter 02 · The economics</div>
+  <h2>Tiering</h2>
+  <p class="lede">Should fast customers and slow customers get different servers? Almost never. They should get one server and different treatment behind it.</p>
+
+  <div class="callout ok"><span class="tag">In the repo</span><p>The providers and <code>route()</code> are in <code>src/economics.ts</code>. Plan tiers themselves are not modelled: the repo routes by <em>constraints</em> on the operation, not by customer plan.</p></div>
+  <p>A common instinct is to publish a <code>tasks-fast</code> server for paying customers and a <code>tasks-slow</code> one for everyone else. It looks tidy and it causes real trouble. A model now sees two near-identical tools and must choose between them from their names, which it will do badly. Every client integration has to know which to connect to. The two drift apart. The cleaner design keeps <strong>one semantic surface</strong> and applies plan quotas, priority, freshness and feature entitlement <em>after</em> identity is known.</p>
+  <p>Separate servers are right when the <em>trust domain</em> or the <em>product</em> differs: a payments server and a tasks server, an EU-only deployment for data that cannot leave. They are wrong when the only difference is how fast you serve the same contract.</p>
+  <div class="cap"><b>src/economics.ts</b><span>route(): hard constraints first, then the cheapest</span></div><pre class="code server" tabindex="0"><code><span class="t-k">export</span> <span class="t-k">function</span> route(operation: Operation, providers: Provider[]): Decision {
+  <span class="t-k">const</span> rejected: { id: string; reason: string }[] = [],
+    eligible: Provider[] = [];
+  <span class="t-k">for</span> (<span class="t-k">const</span> p <span class="t-k">of</span> providers) {
+    <span class="t-k">const</span> reason =
+      !p.available ? <span class="t-s">'unavailable'</span>
+      : p.trust !== <span class="t-s">'verified'</span> ? <span class="t-s">'unverified provider'</span>
+      : !p.capabilities.includes(operation.capability) ? <span class="t-s">'capability mismatch'</span>
+      : p.semantics !== operation.semantics ? <span class="t-s">'semantic contract mismatch'</span>
+      : operation.write &amp;&amp; !p.writes ? <span class="t-s">'write unsupported'</span>
+      : operation.freshness === <span class="t-s">'live'</span> &amp;&amp; p.freshness !== <span class="t-s">'live'</span> ?
+        <span class="t-s">'freshness mismatch'</span>
+      : operation.residency !== <span class="t-s">'any'</span> &amp;&amp; p.residency !== operation.residency ?
+        <span class="t-s">'residency mismatch'</span>
+      : operation.mode &amp;&amp; p.mode !== operation.mode ? <span class="t-s">'execution-mode mismatch'</span>
+      : p.p95Ms &gt; operation.maxLatencyMs ? <span class="t-s">'latency SLO exceeded'</span>
+      : p.costMicros &gt; operation.maxCostMicros ? <span class="t-s">'cost ceiling exceeded'</span>
+      : <span class="t-s">''</span>;
+    <span class="t-k">if</span> (reason) rejected.push({ id: p.id, reason });
+    <span class="t-k">else</span> eligible.push(p);
+  }
+  eligible.sort(
+    (a, b) =&gt;
+      a.costMicros - b.costMicros || a.p95Ms - b.p95Ms || a.id.localeCompare(b.id),
+  );
+  <span class="t-k">return</span> eligible.length ?
+      {
+        selected: eligible[<span class="t-n">0</span>],
+        rejected,
+        reason:
+          <span class="t-s">'Cheapest provider satisfying the explicit semantic, policy, freshness, residency, latency and trust contract.'</span>,
+      }
+    : {
+        rejected,
+        reason:
+          <span class="t-s">'No provider satisfies every hard constraint; the router refuses a silent downgrade.'</span>,
+      };
+}</code></pre>
+  <p>The router works in two stages. First, every provider is tested against every constraint in a fixed order and the <em>first</em> failing one is recorded as the reason: available, verified, has the capability, same semantic contract, can write if a write is needed, fresh enough, right region, right mode, fast enough, cheap enough. Then the survivors are sorted by cost, then latency, then id, and the first wins. If there are no survivors, the answer is a refusal with reasons.</p>
+  <div class="panel sim" data-sim="route" data-presets="[{&quot;label&quot;:&quot;The lab baseline&quot;,&quot;cap&quot;:&quot;task.search&quot;,&quot;sem&quot;:&quot;teamspace-v1&quot;,&quot;fresh&quot;:&quot;live&quot;,&quot;res&quot;:&quot;us&quot;,&quot;mode&quot;:&quot;realtime&quot;,&quot;write&quot;:false,&quot;lat&quot;:500,&quot;cost&quot;:100,&quot;down&quot;:[]},{&quot;label&quot;:&quot;A write&quot;,&quot;cap&quot;:&quot;task.search&quot;,&quot;sem&quot;:&quot;teamspace-v1&quot;,&quot;fresh&quot;:&quot;live&quot;,&quot;res&quot;:&quot;us&quot;,&quot;mode&quot;:&quot;realtime&quot;,&quot;write&quot;:true,&quot;lat&quot;:500,&quot;cost&quot;:100,&quot;down&quot;:[]},{&quot;label&quot;:&quot;The slow lane&quot;,&quot;cap&quot;:&quot;page.search&quot;,&quot;sem&quot;:&quot;teamspace-v1&quot;,&quot;fresh&quot;:&quot;stale-ok&quot;,&quot;res&quot;:&quot;eu&quot;,&quot;mode&quot;:&quot;task&quot;,&quot;write&quot;:false,&quot;lat&quot;:10000,&quot;cost&quot;:10,&quot;down&quot;:[]},{&quot;label&quot;:&quot;Standard is down&quot;,&quot;cap&quot;:&quot;task.search&quot;,&quot;sem&quot;:&quot;teamspace-v1&quot;,&quot;fresh&quot;:&quot;live&quot;,&quot;res&quot;:&quot;us&quot;,&quot;mode&quot;:&quot;realtime&quot;,&quot;write&quot;:false,&quot;lat&quot;:500,&quot;cost&quot;:100,&quot;down&quot;:[&quot;teamspace-standard-us&quot;]},{&quot;label&quot;:&quot;Down, tight budget&quot;,&quot;cap&quot;:&quot;task.search&quot;,&quot;sem&quot;:&quot;teamspace-v1&quot;,&quot;fresh&quot;:&quot;live&quot;,&quot;res&quot;:&quot;us&quot;,&quot;mode&quot;:&quot;realtime&quot;,&quot;write&quot;:false,&quot;lat&quot;:500,&quot;cost&quot;:50,&quot;down&quot;:[&quot;teamspace-standard-us&quot;]}]"><div class="panel-hd"><h3 class="ph">Interactive · Route an operation</h3><div class="ctl"><button class="btn ghost" type="button" data-p="0">The lab baseline</button><button class="btn ghost" type="button" data-p="1">A write</button><button class="btn ghost" type="button" data-p="2">The slow lane</button><button class="btn ghost" type="button" data-p="3">Standard is down</button><button class="btn ghost" type="button" data-p="4">Down, tight budget</button></div></div><div class="panel-bd">
+    <div class="fields">
+      <label class="field">Capability<select class="r-cap"><option value="task.search">task.search</option><option value="page.search">page.search</option><option value="task.write">task.write</option></select></label>
+      <label class="field">Semantic contract<select class="r-sem"><option value="teamspace-v1">teamspace-v1</option><option value="other-v2">other-v2</option><option value="unknown-product">unknown-product</option></select></label>
+      <label class="field">Freshness<select class="r-fresh"><option value="live">live</option><option value="stale-ok">stale-ok</option></select></label>
+      <label class="field">Residency<select class="r-res"><option value="us">us</option><option value="eu">eu</option><option value="any">any</option></select></label>
+      <label class="field">Execution mode<select class="r-mode"><option value="(any)">(any)</option><option value="realtime">realtime</option><option value="task">task</option></select></label>
+    </div>
+    <div class="fields">
+      <label class="field"><span><input type="checkbox" class="r-write"> This operation writes</span></label>
+      <label class="field">Max latency (ms)<input type="number" class="r-lat" value="500" min="50" max="60000" step="50"></label>
+      <label class="field">Max cost (micros)<input type="number" class="r-cost" value="100" min="1" max="1000" step="1"></label>
+    </div>
+    <div class="fields"><span class="figcap" style="flex-basis:100%;margin:0">Take a provider out of service:</span>
+      <label class="field" style="flex-direction:row;gap:8px"><input type="checkbox" class="r-down" data-id="teamspace-standard-us"> standard-us</label>
+      <label class="field" style="flex-direction:row;gap:8px"><input type="checkbox" class="r-down" data-id="teamspace-priority-us"> priority-us</label>
+      <label class="field" style="flex-direction:row;gap:8px"><input type="checkbox" class="r-down" data-id="teamspace-batch-eu"> batch-eu</label>
+    </div>
+    <div data-out="decision" role="status"></div>
+    <div class="tbl-wrap"><table class="mini" style="margin:0"><caption class="sr">Providers considered</caption><thead><tr><th scope="col">Provider</th><th scope="col">Semantics</th><th scope="col">Mode</th><th scope="col">p95</th><th scope="col">Cost</th><th scope="col">Result</th></tr></thead><tbody data-out="rows"></tbody></table></div>
+    <p class="figcap">A port of <code>route()</code> and the four providers in <code>src/economics.ts</code>. Reasons are checked in the same order as the source, so the <em>first</em> failing constraint is the one named. Among providers that pass everything, the cheapest wins.</p>
+  </div></div>
+  <p>Try each preset, and read the table underneath, which names the first reason each provider was rejected. Three behaviours are worth seeing for yourself:</p>
+  <ul>
+    <li><strong>Standard is down</strong> falls over to priority. They share the <code>teamspace-v1</code> contract, so the substitution is safe. It costs more (90 against 20) but fits the 100 ceiling.</li>
+    <li><strong>Down, tight budget</strong> lowers the ceiling to 50, and now <em>nothing</em> qualifies. The router returns a refusal rather than quietly spending more than the caller allowed. Whether to raise the ceiling is a decision for a person or a policy, not for the router.</li>
+    <li><strong>A write</strong> selects priority, because the standard provider does not write. Writes need a provider that says it can.</li>
+  </ul>
+  <div class="callout"><span class="tag">Where the plan fits</span><p>The plan tier is not in <code>route()</code> at all. It would arrive as an input: a <em>free</em> customer’s operations would carry a lower <code>maxCostMicros</code> and a higher <code>maxLatencyMs</code>, a <em>priority</em> customer’s the opposite. The router stays a pure function of constraints, which is what makes it testable, and policy decides which constraints a caller gets.</p></div>
+
+</section>
+
+<!-- ============ 03 ============ -->
+<section class="chapter" id="ch03">
+  <div class="eyebrow">Chapter 03 · The economics</div>
+  <h2>Async economics</h2>
+  <p class="lede">A slow lane is not just a slower fast lane. It is a different way of doing the work, and it only pays when waiting saves real money.</p>
+
+  <div class="callout "><span class="tag">Partly in the repo</span><p>The <code>teamspace-batch-eu</code> provider is in the router here, and the job table, leases and worker it stands for run in MCP 103. The break-even arithmetic below is plain calculation, not a repo function.</p></div>
+  <p>Two ideas get run together here and should be separated. <strong>Stateless</strong> means a request carries its own context, so any replica can serve it, which suits serverless and edge hosting. It says nothing about <em>speed</em> or <em>waiting</em>: a normal stateless tool call can still finish in ninety milliseconds. A <strong>slow lane</strong> is a lifecycle: accept the work, persist it, lease it to a worker, retry on failure, expose its status, expire the result. It is what MCP 103 Chapter 07 begins.</p>
+  <p>A slow lane earns its complexity only when waiting <em>saves</em> something material. The classic cases are GPU inference that batches many requests into one pass, large exports, and index rebuilds. It is a poor fit for a cheap database lookup: delaying a query that costs a few micros will not recover the cost of building and running a second service tier.</p>
+  <div class="run"><div class="run-hd"><span>Captured run</span><span>captured 2026-09-20 · from labs/economics.ts</span></div><pre tabindex="0"><code><span class="t-k">$ </span>route(page.search, stale-ok, EU, task mode, 10 s, ≤ 10 micros)
+{
+  "selected": "teamspace-batch-eu",
+  "rejected": [
+    {
+      "id": "teamspace-standard-us",
+      "reason": "residency mismatch"
+    },
+    {
+      "id": "teamspace-priority-us",
+      "reason": "residency mismatch"
+    },
+    {
+      "id": "lookalike-fast",
+      "reason": "capability mismatch"
+    }
+  ]
+}</code></pre></div>
+  <p>The lab asks for a stale-tolerant, EU-resident, asynchronous page search that can wait ten seconds. Only the batch provider qualifies: the two realtime providers are rejected on residency, and the lookalike on capability. It costs 4 micros against the standard provider’s 20, a saving of 80 percent per call. Now ask whether that is worth building:</p>
+
+  <div class="panel sim" id="sim-async"><div class="panel-hd"><h3 class="ph">Interactive · Is the slow lane worth it?</h3></div><div class="panel-bd">
+    <div class="fields">
+      <label class="field">Calls per month<input type="number" id="as-vol" value="200000" min="1000" max="1000000000" step="10000"></label>
+      <label class="field">Share that can wait <output id="as-share-o">40%</output><input type="range" id="as-share" min="0" max="100" step="5" value="40"></label>
+      <label class="field">Realtime cost per call (micros)<input type="number" id="as-rt" value="20" min="1" max="10000"></label>
+      <label class="field">Batch cost per call (micros)<input type="number" id="as-b" value="4" min="0" max="10000"></label>
+      <label class="field">Extra fixed cost of running the lane, per month (micros)<input type="number" id="as-fix" value="50000000" min="0" max="10000000000" step="1000000"></label>
+    </div>
+    <div class="readout" id="as-read"></div>
+    <p id="as-verdict" role="status"></p>
+    <p class="figcap">Plain arithmetic, not a repo function. The cost figures start as the router’s standard and batch providers; the monthly fixed cost is <em>an invented number</em>: the point is that it exists. Break-even volume is the fixed cost divided by the saving per call across the calls that can wait.</p>
+  </div></div>
+
+  <p>Lower the share that can wait, or the fixed cost’s tolerance, and the verdict flips quickly. With the default numbers, 200,000 calls a month save well under the invented fixed cost, so the lane does not pay. It starts to pay at millions of calls, or at a much larger per-call gap. That is the general shape of the argument for building a slow lane: <em>volume times per-call saving must beat the cost of running two paths</em>, and if the per-call gap is a few micros you need very high volume.</p>
+  <div class="callout"><span class="tag">What the slow lane changes for callers</span><p>Everything about the contract: the answer is not in the response, it is a handle. The tool’s description has to say so, the host has to poll or be told, and results expire. Do not offer a slow lane as a hidden option behind an identical-looking tool. Make the mode explicit, as the router does (<code>mode: "task"</code>).</p></div>
+
+</section>
+
+<!-- ============ 04 ============ -->
+<section class="chapter" id="ch04">
+  <div class="eyebrow">Chapter 04 · Routing and gateways</div>
+  <h2>Gateways</h2>
+  <p class="lede">A gateway is a single place to enforce discovery, identity, policy, audit and quotas for many servers. It is also a single place for everything to go wrong at once.</p>
+
+  <div class="callout "><span class="tag">Design chapter</span><p>There is no gateway in this repository. The only routing surface is the <code>explain_route</code> tool, which is real and shown below. The trace is a design sketch, labelled as such.</p></div>
+  <p>Once an organisation has ten MCP servers instead of one, the same problems appear ten times. Which servers may a host connect to? Whose credentials does each one use? Who is allowed to call what? Where is the audit trail? A <strong>gateway</strong> answers those once. It owns:</p>
+  <ul>
+    <li><strong>Discovery</strong>: a verified catalogue of servers, not a list someone pasted into a config file.</li>
+    <li><strong>Client OAuth</strong> and the <strong>delegated identity</strong> that goes downstream.</li>
+    <li><strong>Policy, audit and quotas</strong> across all servers, in one place.</li>
+    <li><strong>Route evidence</strong>: a record of which provider handled a request and why.</li>
+  </ul>
+  <p>It must <em>not</em> mint a more privileged downstream identity than the user has, and it must not hide which provider handled a write. A gateway that quietly acts as itself, with its own broad credentials, has turned every user into whatever the gateway can do.</p>
+
+  <div class="panel" data-w="trace"><div class="panel-hd"><h3 class="ph">Design sketch · One call through a gateway</h3></div><div class="panel-bd"><div class="lanes" data-lanes="[{&quot;id&quot;:&quot;host&quot;,&quot;t&quot;:&quot;HOST&quot;,&quot;s&quot;:&quot;the caller&quot;,&quot;c&quot;:&quot;host&quot;},{&quot;id&quot;:&quot;gw&quot;,&quot;t&quot;:&quot;GATEWAY&quot;,&quot;s&quot;:&quot;policy + routing&quot;,&quot;c&quot;:&quot;server&quot;},{&quot;id&quot;:&quot;prov&quot;,&quot;t&quot;:&quot;PROVIDER&quot;,&quot;s&quot;:&quot;a Teamspace server&quot;,&quot;c&quot;:&quot;prod&quot;}]"></div><ol class="steps"><li data-lane="host" data-badge="sketch" data-tone="wire"><p class="st">The host calls the gateway as the user</p><p class="sd">One endpoint for many servers. The token is the user’s, issued for the gateway’s audience.</p><div class="fr from-host"><p class="frame-tag from-host">sketch · not in the repo</p><pre class="frame-json from-host" tabindex="0"><code><span class="t-k">POST</span> https://gateway.example/mcp
+<span class="t-p">Authorization</span>: Bearer &lt;user token, aud=gateway&gt;
+<span class="t-p">Mcp-Method</span>: tools/call
+<span class="t-p">Mcp-Name</span>: search_tasks</code></pre></div></li><li data-lane="gw" data-badge="sketch" data-tone="wire"><p class="st">It checks who and what, before choosing where</p><p class="sd">Verify the token. Apply policy for this user and this tool. Fail <em>closed</em>: if the policy source is unreachable, deny.</p></li><li data-lane="gw" data-badge="implemented as route()" data-tone="server"><p class="st">It routes on hard constraints</p><p class="sd">This is the part the repo does implement: <code>route()</code> filters providers by semantic contract, residency, freshness, latency and cost, then takes the cheapest survivor.</p><div class="fr from-server"><p class="frame-tag from-server">the real explain_route answer · captured</p><pre class="frame-json from-server" tabindex="0"><code>{
+  <span class="t-p">"selected"</span>: {
+    <span class="t-p">"id"</span>: <span class="t-s">"teamspace-standard-us"</span>,
+    <span class="t-p">"vendor"</span>: <span class="t-s">"teamspace"</span>,
+    <span class="t-p">"capabilities"</span>: [
+      <span class="t-s">"task.search"</span>,
+      <span class="t-s">"page.search"</span>
+    ],
+    <span class="t-p">"semantics"</span>: <span class="t-s">"teamspace-v1"</span>,
+    <span class="t-p">"writes"</span>: <span class="t-k">false</span>,
+    <span class="t-p">"freshness"</span>: <span class="t-s">"live"</span>,
+    <span class="t-p">"residency"</span>: <span class="t-s">"us"</span>,
+    <span class="t-p">"mode"</span>: <span class="t-s">"realtime"</span>,
+    <span class="t-p">"p95Ms"</span>: <span class="t-n">450</span>,
+    <span class="t-p">"costMicros"</span>: <span class="t-n">20</span>,
+    <span class="t-p">"available"</span>: <span class="t-k">true</span>,
+    <span class="t-p">"trust"</span>: <span class="t-s">"verified"</span>
+  },
+  <span class="t-p">"rejected"</span>: [
+    {
+      <span class="t-p">"id"</span>: <span class="t-s">"teamspace-batch-eu"</span>,
+      <span class="t-p">"reason"</span>: <span class="t-s">"capability mismatch"</span>
+    },
+    {
+      <span class="t-p">"id"</span>: <span class="t-s">"lookalike-fast"</span>,
+      <span class="t-p">"reason"</span>: <span class="t-s">"semantic contract mismatch"</span>
+    }
+  ],
+  <span class="t-p">"reason"</span>: <span class="t-s">"Cheapest provider satisfying the explicit semantic, policy, freshness, residency, latency and trust contract."</span>
+}</code></pre></div></li><li data-lane="gw" data-badge="sketch" data-tone="wire"><p class="st">It calls the provider as the same user</p><p class="sd">A fresh token for the provider’s audience, carrying the <em>original</em> subject, not the gateway’s own identity. Deadline and budget travel with it (MCP 103, <code>nextHop()</code>).</p><div class="fr from-server"><p class="frame-tag from-server">sketch · not in the repo</p><pre class="frame-json from-server" tabindex="0"><code><span class="t-k">POST</span> https://tasks.provider/mcp
+<span class="t-p">Authorization</span>: Bearer &lt;token, aud=provider, sub=alice&gt;
+<span class="t-p">X-Route-Evidence</span>: teamspace-standard-us</code></pre></div></li><li data-lane="prov" data-badge="the product" data-tone="prod"><p class="st">The provider enforces its own rules</p><p class="sd">The gateway is a second lock, not a replacement for the first. Tenant scope, role and approval still live in the product.</p></li><li data-lane="gw" data-badge="sketch" data-tone="wire"><p class="st">The answer returns with the route recorded</p><p class="sd">The gateway keeps <em>which provider</em> handled it and <em>why</em>, so a bad write can be traced to a decision.</p></li></ol></div></div>
+
+  <h3>The one real piece: explain_route</h3>
+  <p>The repository exposes the router’s reasoning as a read-only tool. It <em>explains</em> a routing decision and performs nothing. Here are two real calls over HTTP, the accepted one and a refusal:</p>
+  <div class="cols">
+    <div><div class="fr"><p class="frame-tag from-host">tools/call explain_route · captured</p><pre class="frame-json from-host" tabindex="0"><code><span class="t-k">POST</span> /mcp
+<span class="t-p">MCP-Protocol-Version</span>: 2026-07-28
+<span class="t-p">Mcp-Method</span>: tools/call
+<span class="t-p">Mcp-Name</span>: explain_route
+
+{
+  <span class="t-s">"method"</span>: <span class="t-s">"tools/call"</span>,
+  <span class="t-s">"params"</span>: {
+    <span class="t-s">"name"</span>: <span class="t-s">"explain_route"</span>,
+    <span class="t-s">"arguments"</span>: {
+      <span class="t-s">"capability"</span>: <span class="t-s">"task.search"</span>,
+      <span class="t-s">"semantics"</span>: <span class="t-s">"teamspace-v1"</span>,
+      <span class="t-s">"write"</span>: false,
+      <span class="t-s">"freshness"</span>: <span class="t-s">"live"</span>,
+      <span class="t-s">"residency"</span>: <span class="t-s">"us"</span>,
+      <span class="t-s">"maxLatencyMs"</span>: <span class="t-n">500</span>,
+      <span class="t-s">"maxCostMicros"</span>: <span class="t-n">100</span>,
+      <span class="t-s">"mode"</span>: <span class="t-s">"realtime"</span>
+    },
+    <span class="t-s">"_meta"</span>: {
+      <span class="t-s">"…"</span>: <span class="t-s">"same _meta envelope as the first request"</span>
+    }
+  },
+  <span class="t-s">"jsonrpc"</span>: <span class="t-s">"2.0"</span>,
+  <span class="t-s">"id"</span>: 1
+}</code></pre></div></div>
+    <div><div class="fr"><p class="frame-tag from-host">the same tool, an unknown contract · captured</p><pre class="frame-json from-host" tabindex="0"><code><span class="t-k">POST</span> /mcp
+<span class="t-p">MCP-Protocol-Version</span>: 2026-07-28
+<span class="t-p">Mcp-Method</span>: tools/call
+<span class="t-p">Mcp-Name</span>: explain_route
+
+{
+  <span class="t-s">"method"</span>: <span class="t-s">"tools/call"</span>,
+  <span class="t-s">"params"</span>: {
+    <span class="t-s">"name"</span>: <span class="t-s">"explain_route"</span>,
+    <span class="t-s">"arguments"</span>: {
+      <span class="t-s">"capability"</span>: <span class="t-s">"task.search"</span>,
+      <span class="t-s">"semantics"</span>: <span class="t-s">"unknown-product"</span>,
+      <span class="t-s">"maxLatencyMs"</span>: <span class="t-n">500</span>,
+      <span class="t-s">"maxCostMicros"</span>: <span class="t-n">100</span>
+    },
+    <span class="t-s">"_meta"</span>: {
+      <span class="t-s">"…"</span>: <span class="t-s">"same _meta envelope as the first request"</span>
+    }
+  },
+  <span class="t-s">"jsonrpc"</span>: <span class="t-s">"2.0"</span>,
+  <span class="t-s">"id"</span>: 2
+}</code></pre></div></div>
+  </div>
+  <div class="fr"><p class="frame-tag from-server">the refusal, parsed · captured</p><pre class="frame-json from-server" tabindex="0"><code>{
+  <span class="t-p">"rejected"</span>: [
+    {
+      <span class="t-p">"id"</span>: <span class="t-s">"teamspace-standard-us"</span>,
+      <span class="t-p">"reason"</span>: <span class="t-s">"semantic contract mismatch"</span>
+    },
+    {
+      <span class="t-p">"id"</span>: <span class="t-s">"teamspace-priority-us"</span>,
+      <span class="t-p">"reason"</span>: <span class="t-s">"semantic contract mismatch"</span>
+    },
+    {
+      <span class="t-p">"id"</span>: <span class="t-s">"teamspace-batch-eu"</span>,
+      <span class="t-p">"reason"</span>: <span class="t-s">"capability mismatch"</span>
+    },
+    {
+      <span class="t-p">"id"</span>: <span class="t-s">"lookalike-fast"</span>,
+      <span class="t-p">"reason"</span>: <span class="t-s">"semantic contract mismatch"</span>
+    }
+  ],
+  <span class="t-p">"reason"</span>: <span class="t-s">"No provider satisfies every hard constraint; the router refuses a silent downgrade."</span>
+}</code></pre></div>
+  <p>The second answer is the useful one. Four providers were considered and none qualified: three on the semantic contract and one on capability. The reason says the router <em>refuses a silent downgrade</em>. It does not pick the next-best thing. That evidence is what makes a routing decision inspectable after the fact, which is the property a gateway most needs.</p>
+  <div class="callout"><span class="tag">A single point of trust</span><p>A gateway concentrates risk. It becomes a high-value target and a failure boundary at once. Design its regional availability before optimising its latency. Make it fail closed for policy. Isolate one tenant’s cached data from another’s. Sign the catalogue it serves. And make its decisions explainable, as <code>explain_route</code> does, before making them fast.</p></div>
+  <p><code>explain_route</code> goes through the same <code>guarded()</code> pipeline as every other tool (MCP 103, Chapter 00): it takes a rate-limit permit, writes an audit row carrying its trace id, and answers in the standard shape. A read-only tool still spends server capacity, and a record of who asked how a routing decision was made is worth having.</p>
+
+</section>
+
+<!-- ============ 05 ============ -->
+<section class="chapter" id="ch05">
+  <div class="eyebrow">Chapter 05 · Routing and gateways</div>
+  <h2>Tool retrieval</h2>
+  <p class="lede">A host with a thousand tools cannot show a model a thousand tools. Retrieval picks a few. It is a filter for attention, never a lock.</p>
+
+  <div class="callout "><span class="tag">Design chapter</span><p>There is no catalogue or retrieval in this repository. The demo below is a deliberately crude lexical toy, run over the <em>real</em> eleven tool descriptions from this server, to make the idea concrete.</p></div>
+  <p>Every tool description a host loads into a model’s context costs tokens on every turn and competes for the model’s attention. With a handful of tools that is fine. With a large catalogue (many servers, hundreds of tools) two things degrade: the context fills up, and selection gets worse because there are too many plausible choices. The remedy is <strong>retrieval</strong>: search a trusted catalogue by the task in hand, and expose only a small set of candidates.</p>
+  <div class="panel sim" id="sim-retr"><div class="panel-hd"><h3 class="ph">Interactive · Choose the tools to show</h3></div><div class="panel-bd">
+    <div class="fields">
+      <label class="field">The task<input type="text" id="rt-q" value="show completed tasks for the release" style="min-width:280px"></label>
+      <label class="field">Acting as<select id="rt-who"><option value="alice">alice (admin, pro)</option><option value="viewer">viewer (viewer, pro)</option><option value="eve">eve (admin, free)</option></select></label>
+      <label class="field">Tools to show <output id="rt-k-o">3</output><input type="range" id="rt-k" min="1" max="6" value="3"></label>
+      <label class="field"><span><input type="checkbox" id="rt-pol" checked> The host hides tools this person cannot use</span></label>
+    </div>
+    <div class="readout" id="rt-read"></div>
+    <table class="mini"><caption>The catalogue: eleven real tools, ranked by word overlap</caption><thead><tr><th scope="col">tool</th><th scope="col">score</th><th scope="col">shown to the model?</th></tr></thead><tbody id="rt-rows"></tbody></table>
+    <div class="fields" style="margin-top:14px"><label class="field">Now call a tool anyway<select id="rt-try"><option>create_task</option><option>update_task</option><option>publish_page</option><option>start_release_job</option><option>search_tasks</option><option>import_url</option></select></label><button class="btn" type="button" id="rt-call">Call it</button></div>
+    <p id="rt-try-out" role="status"></p>
+    <p class="figcap">A toy: words in the task are matched against each tool’s name and description. Real systems use embeddings and metadata filters, and the trap is the same. The last control is the point of the chapter: whatever retrieval hides, the server must still authorise.</p></div></div>
+  <p>Try the default task and a few of your own. Retrieval narrows eleven tools to three, and the readout shows how much of the description text the model no longer has to read. Then switch to the <em>viewer</em> and call <code>create_task</code> even though the host hid it.</p>
+  <h3>What retrieval is, and is not</h3>
+  <ul>
+    <li><strong>Narrowing, not authorising.</strong> Retrieval decides what the model <em>sees</em>. Authorisation decides what may <em>happen</em>. A hidden tool can still be named by a model or a caller, and the server must refuse it exactly as it would have if it were visible, which MCP 102 and 103 both build in.</li>
+    <li><strong>The catalogue is a trust boundary.</strong> An entry needs a publisher identity, a semantic version, the scopes it needs, whether it has side effects, its data residency, a deprecation status and its provenance. Metadata a stranger’s server supplies about itself is <em>input to be verified</em>, not routing policy.</li>
+    <li><strong>Descriptions are attack surface.</strong> Retrieval reads tool descriptions to rank them, so a description written to rank highly for everything is an attack. Rank on trusted metadata first and on description text second.</li>
+    <li><strong>Filter by entitlement before ranking.</strong> Offering a tool the person can never use wastes a slot and invites a failed call.</li>
+  </ul>
+  <div class="callout"><span class="tag">The cost of getting it wrong</span><p>If retrieval hides the right tool, the model improvises with the wrong one. If it shows a dangerous tool to someone who should not have it and the server trusts the host to have filtered, you have moved the security boundary into a ranking function. Keep the server’s checks as if retrieval did not exist.</p></div>
+
+</section>
+
+<!-- ============ 06 ============ -->
+<section class="chapter" id="ch06">
+  <div class="eyebrow">Chapter 06 · Routing and gateways</div>
+  <h2>Semantic routing</h2>
+  <p class="lede">Two tools can share a name and a price list and still disagree about what &ldquo;search&rdquo; means. Routing between them without checking is how data goes missing quietly.</p>
+
+  <div class="callout ok"><span class="tag">In the repo</span><p>The semantic-contract check is the fourth constraint in <code>route()</code>, and three of the five new tests cover it.</p></div>
+  <p>Routing between <em>models</em> is comparatively easy, because most text models share an interface: text in, text out. If two models disagree slightly, the result is a somewhat different sentence. Routing between <em>tools</em> is not, because a tool has semantics. Two tools both called <code>search_tasks</code> may disagree on which tenants they search, whether archived items appear, how results are ranked, how fresh the index is, and whether the ids they return mean the same thing. Swap one for the other and nothing errors. The answers are simply wrong, and no one is told.</p>
+  <p>The lab includes a provider built to test exactly that: <code>lookalike-fast</code>. It advertises the same capability (<code>task.search</code>), it is cheaper (2 against 20 micros), and it is faster (60 against 450 ms). On price and latency alone it would win every time. It does not, because its contract is <code>other-v2</code>.</p>
+  <div class="panel sim" data-sim="route" data-presets="[{&quot;label&quot;:&quot;Needs teamspace-v1&quot;,&quot;cap&quot;:&quot;task.search&quot;,&quot;sem&quot;:&quot;teamspace-v1&quot;,&quot;fresh&quot;:&quot;live&quot;,&quot;res&quot;:&quot;us&quot;,&quot;mode&quot;:&quot;realtime&quot;,&quot;write&quot;:false,&quot;lat&quot;:500,&quot;cost&quot;:100,&quot;down&quot;:[]},{&quot;label&quot;:&quot;Needs other-v2&quot;,&quot;cap&quot;:&quot;task.search&quot;,&quot;sem&quot;:&quot;other-v2&quot;,&quot;fresh&quot;:&quot;live&quot;,&quot;res&quot;:&quot;us&quot;,&quot;mode&quot;:&quot;realtime&quot;,&quot;write&quot;:false,&quot;lat&quot;:500,&quot;cost&quot;:100,&quot;down&quot;:[]},{&quot;label&quot;:&quot;Needs a contract nobody offers&quot;,&quot;cap&quot;:&quot;task.search&quot;,&quot;sem&quot;:&quot;unknown-product&quot;,&quot;fresh&quot;:&quot;live&quot;,&quot;res&quot;:&quot;us&quot;,&quot;mode&quot;:&quot;realtime&quot;,&quot;write&quot;:false,&quot;lat&quot;:500,&quot;cost&quot;:100,&quot;down&quot;:[]}]"><div class="panel-hd"><h3 class="ph">Interactive · The router with the contract as an input</h3><div class="ctl"><button class="btn ghost" type="button" data-p="0">Needs teamspace-v1</button><button class="btn ghost" type="button" data-p="1">Needs other-v2</button><button class="btn ghost" type="button" data-p="2">Needs a contract nobody offers</button></div></div><div class="panel-bd">
+    <div class="fields">
+      <label class="field">Capability<select class="r-cap"><option value="task.search">task.search</option><option value="page.search">page.search</option><option value="task.write">task.write</option></select></label>
+      <label class="field">Semantic contract<select class="r-sem"><option value="teamspace-v1">teamspace-v1</option><option value="other-v2">other-v2</option><option value="unknown-product">unknown-product</option></select></label>
+      <label class="field">Freshness<select class="r-fresh"><option value="live">live</option><option value="stale-ok">stale-ok</option></select></label>
+      <label class="field">Residency<select class="r-res"><option value="us">us</option><option value="eu">eu</option><option value="any">any</option></select></label>
+      <label class="field">Execution mode<select class="r-mode"><option value="(any)">(any)</option><option value="realtime">realtime</option><option value="task">task</option></select></label>
+    </div>
+    <div class="fields">
+      <label class="field"><span><input type="checkbox" class="r-write"> This operation writes</span></label>
+      <label class="field">Max latency (ms)<input type="number" class="r-lat" value="500" min="50" max="60000" step="50"></label>
+      <label class="field">Max cost (micros)<input type="number" class="r-cost" value="100" min="1" max="1000" step="1"></label>
+    </div>
+    <div class="fields"><span class="figcap" style="flex-basis:100%;margin:0">Take a provider out of service:</span>
+      <label class="field" style="flex-direction:row;gap:8px"><input type="checkbox" class="r-down" data-id="teamspace-standard-us"> standard-us</label>
+      <label class="field" style="flex-direction:row;gap:8px"><input type="checkbox" class="r-down" data-id="teamspace-priority-us"> priority-us</label>
+      <label class="field" style="flex-direction:row;gap:8px"><input type="checkbox" class="r-down" data-id="teamspace-batch-eu"> batch-eu</label>
+    </div>
+    <div data-out="decision" role="status"></div>
+    <div class="tbl-wrap"><table class="mini" style="margin:0"><caption class="sr">Providers considered</caption><thead><tr><th scope="col">Provider</th><th scope="col">Semantics</th><th scope="col">Mode</th><th scope="col">p95</th><th scope="col">Cost</th><th scope="col">Result</th></tr></thead><tbody data-out="rows"></tbody></table></div>
+    <p class="figcap">The same <code>route()</code> as Chapter 02. The <em>operation</em> states which semantic contract it needs, and the router never infers equivalence: it only matches. Watch <code>lookalike-fast</code> in each preset.</p>
+  </div></div>
+  <p>Read the presets in order. <strong>Needs teamspace-v1</strong>: the lookalike is rejected as a <em>semantic contract mismatch</em>, though it would have been cheapest. <strong>Needs other-v2</strong>: now it is the only provider that qualifies, and the Teamspace providers are the ones rejected. <strong>Needs a contract nobody offers</strong>: no provider is chosen at all. The router’s answer is a refusal, not the nearest match.</p>
+  <div class="run"><div class="run-hd"><span>Captured run</span><span>captured 2026-09-20</span></div><pre tabindex="0"><code><span class="t-k">$ </span>the real router: labs/economics.ts, "unsafeSwap"
+{
+  "rejected": [
+    {
+      "id": "teamspace-standard-us",
+      "reason": "semantic contract mismatch"
+    },
+    {
+      "id": "teamspace-priority-us",
+      "reason": "semantic contract mismatch"
+    },
+    {
+      "id": "teamspace-batch-eu",
+      "reason": "capability mismatch"
+    },
+    {
+      "id": "lookalike-fast",
+      "reason": "semantic contract mismatch"
+    }
+  ],
+  "reason": "No provider satisfies every hard constraint; the router refuses a silent downgrade."
+}</code></pre></div>
+  <div class="fr"><p class="frame-tag from-server">the same refusal over MCP, from explain_route · captured</p><pre class="frame-json from-server" tabindex="0"><code>{
+  <span class="t-p">"rejected"</span>: [
+    {
+      <span class="t-p">"id"</span>: <span class="t-s">"teamspace-standard-us"</span>,
+      <span class="t-p">"reason"</span>: <span class="t-s">"semantic contract mismatch"</span>
+    },
+    {
+      <span class="t-p">"id"</span>: <span class="t-s">"teamspace-priority-us"</span>,
+      <span class="t-p">"reason"</span>: <span class="t-s">"semantic contract mismatch"</span>
+    },
+    {
+      <span class="t-p">"id"</span>: <span class="t-s">"teamspace-batch-eu"</span>,
+      <span class="t-p">"reason"</span>: <span class="t-s">"capability mismatch"</span>
+    },
+    {
+      <span class="t-p">"id"</span>: <span class="t-s">"lookalike-fast"</span>,
+      <span class="t-p">"reason"</span>: <span class="t-s">"semantic contract mismatch"</span>
+    }
+  ],
+  <span class="t-p">"reason"</span>: <span class="t-s">"No provider satisfies every hard constraint; the router refuses a silent downgrade."</span>
+}</code></pre></div>
+  <div class="run"><div class="run-hd"><span>Captured run</span><span>captured 2026-09-20</span></div><pre tabindex="0"><code><span class="t-k">$ </span>npm test   (the router and cost tests)
+✔ router chooses cheapest provider satisfying every hard constraint
+✔ router does not substitute a semantically different tool
+✔ write routing requires an explicitly write-capable provider
+✔ slow task lane is selected only when requested and allowed
+✔ cost model separates vendor infrastructure from client model cost</code></pre></div>
+  <p>Note what the router does <em>not</em> do: decide that two contracts are equivalent. That is a human decision, made when a provider is registered, recorded as an identical contract string, and it is the same decision a database team makes when they say two indexes are interchangeable. If you want <code>other-v2</code> to satisfy <code>teamspace-v1</code>, declare it, test it, and say why. Do not let a routing layer infer it from a matching name.</p>
+  <div class="tbl-wrap"><table><thead><tr><th scope="col"><span class="sr">Aspect</span></th><th scope="col">Routing between models</th><th scope="col">Routing between tools</th></tr></thead><tbody><tr><th scope="row" class="lbl">The interface</th><td>Largely shared: text in, text out</td><td>Different per tool: schemas, meanings, side effects</td></tr><tr><th scope="row" class="lbl">Wrong choice looks like</th><td>A somewhat different answer</td><td>A confident answer over the wrong data, or a write to the wrong place</td></tr><tr><th scope="row" class="lbl">What must match</th><td>Roughly: quality and price</td><td>Semantics, permissions, side effects, freshness, residency and trust</td></tr><tr><th scope="row" class="lbl">Safe default</th><td>Fall back to a similar model</td><td><strong>Refuse.</strong> Never silently substitute</td></tr></tbody></table></div>
+
+</section>
+
+<!-- ============ 07 ============ -->
+<section class="chapter" id="ch07">
+  <div class="eyebrow">Chapter 07 · Routing and gateways</div>
+  <h2>Auth brokerage</h2>
+  <p class="lede">A model gateway can hold one key for many endpoints. A tool gateway cannot, because every tool is somebody’s data and every call is somebody’s permission.</p>
+
+  <div class="callout "><span class="tag">Design chapter</span><p>No brokerage is implemented here. The identity model to reason against is MCP 102 Chapter 07: audience-scoped tokens minted per call, never forwarded.</p></div>
+  <p>When a gateway sits between hosts and MCP servers it becomes a <strong>broker</strong>: it holds or obtains credentials on the user’s behalf. Model gateways do this happily, because many providers offer interchangeable text endpoints and one account key covers them all. Tool gateways must not copy that shape. Each tool guards <em>a particular person’s access to a particular product</em>, and the gateway’s own credentials are the wrong answer to &ldquo;who is asking?&rdquo;.</p>
+  <div class="panel" data-w="tabs"><div class="panel-hd"><h3 class="ph">Interactive · Three ways a gateway can call downstream</h3></div><div class="panel-bd"><section data-tab="Gateway’s own identity"><p><span class="chip no">wrong for user data</span></p><p>The gateway calls every server with its own service credential. It is simple, and now every downstream server sees <em>the gateway</em> as the caller. A user with no access to a page asks the gateway for it; the gateway has access, so it gets it. This is the <strong>confused deputy</strong>: an over-privileged intermediary lends its authority to whoever asks. Downstream audit shows one actor for every user.</p></section><section data-tab="Delegated user identity"><p><span class="chip ok">the pattern to aim for</span></p><p>The gateway verifies the user’s token, then obtains a token for each downstream server that <em>carries the original subject</em> and is bound to that server’s audience. This is the same step MCP 102’s <code>Downstream.call</code> takes between the MCP server and the product APIs, applied one level up. The product’s own checks then answer for the real person. Downstream audit names the actual user.</p></section><section data-tab="A vault of refresh tokens"><p><span class="chip warn">necessary, and risky</span></p><p>Users often authorise a downstream product once, and the gateway keeps the resulting refresh token so later calls do not need a fresh consent. That is a store of long-lived credentials, and it needs care: encrypt it, separate tenants, bind each access token to its audience, request only the scopes a call needs, and log every consent change. Compromise of this vault is compromise of everyone’s access at once.</p></section></div></div>
+  <div class="tbl-wrap"><table><thead><tr><th scope="col"><span class="sr">Aspect</span></th><th scope="col">Model gateway</th><th scope="col">Tool gateway</th></tr></thead><tbody><tr><th scope="row" class="lbl">What one credential covers</th><td>Many interchangeable endpoints</td><td>Nothing broad. One audience, one user</td></tr><tr><th scope="row" class="lbl">Whose authority is used</th><td>The account holder’s</td><td>The end user’s, delegated</td></tr><tr><th scope="row" class="lbl">Cost of a leak</th><td>Unauthorised model spend</td><td>Unauthorised access to real data and actions</td></tr><tr><th scope="row" class="lbl">Audit question</th><td>Which key was used?</td><td><strong>Which person</strong> acted, on which tenant?</td></tr></tbody></table></div>
+  <h3>Rules that hold in every design</h3>
+  <ul>
+    <li><strong>Carry the original subject</strong> in every downstream call. A gateway service identity alone is not enough for user data.</li>
+    <li><strong>Bind tokens to an audience</strong> and refuse ones meant for other services (MCP 102 Chapter 07 has a simulator for this).</li>
+    <li><strong>Minimise scopes</strong> per call, not per session.</li>
+    <li><strong>Keep approvals in the host.</strong> A gateway that can approve on the user’s behalf has removed the consent it was meant to protect.</li>
+    <li><strong>Log consent changes</strong>, not just calls.</li>
+  </ul>
+  <div class="callout"><span class="tag">One test</span><p>Take any call that goes through your gateway and ask: if the gateway’s own credentials were stolen tomorrow, what could an attacker read that the affected user could not? If the answer is &ldquo;anything&rdquo;, the gateway is acting as itself.</p></div>
+
+</section>
+
+<!-- ============ 08 ============ -->
+<section class="chapter" id="ch08">
+  <div class="eyebrow">Chapter 08 · Composition and the future</div>
+  <h2>A model inside a tool</h2>
+  <p class="lede">Some tools should call a model. Most tools that do are hiding a second agent nobody asked for.</p>
+
+  <div class="callout "><span class="tag">Design chapter</span><p>No tool in this repository calls a model. What is in the repo is the cost model, which the simulator below reuses to show what a server-owned model does to the vendor’s bill.</p></div>
+  <p>An MCP server can call a language model of its own inside a tool: to summarise a long document, extract fields, answer questions about a dataset. That is legitimate when <strong>synthesis is the product</strong>. A &ldquo;summarise this contract&rdquo; tool that calls a model is doing what it says, and the model is an implementation detail.</p>
+  <p>It is a mistake when the model is there to <em>orchestrate</em>: a tool that takes a goal and decides for itself which other tools to call. That is a second agent, in the server, invisible to the host. It compounds non-determinism (two models deciding), latency (a loop with no bound), and prompt-injection exposure (untrusted content now flows into a model the caller never saw). And it makes failures and spend nearly impossible for the host to explain.</p>
+  <div class="panel sim" data-sim="cost" data-presets="[{&quot;label&quot;:&quot;Retrieval only&quot;,&quot;calls&quot;:10000,&quot;wrap&quot;:2,&quot;back&quot;:18,&quot;vmodel&quot;:0,&quot;in&quot;:12,&quot;out&quot;:2,&quot;pin&quot;:500000,&quot;pout&quot;:1500000},{&quot;label&quot;:&quot;Summary tool, small model&quot;,&quot;calls&quot;:10000,&quot;wrap&quot;:2,&quot;back&quot;:18,&quot;vmodel&quot;:3000,&quot;in&quot;:12,&quot;out&quot;:2,&quot;pin&quot;:500000,&quot;pout&quot;:1500000},{&quot;label&quot;:&quot;Summary tool, large model&quot;,&quot;calls&quot;:10000,&quot;wrap&quot;:2,&quot;back&quot;:18,&quot;vmodel&quot;:30000,&quot;in&quot;:12,&quot;out&quot;:2,&quot;pin&quot;:500000,&quot;pout&quot;:1500000}]"><div class="panel-hd"><h3 class="ph">Interactive · What a server-owned model does to the vendor bill</h3><div class="ctl"><button class="btn ghost" type="button" data-p="0">Retrieval only</button><button class="btn ghost" type="button" data-p="1">Summary tool, small model</button><button class="btn ghost" type="button" data-p="2">Summary tool, large model</button></div></div><div class="panel-bd">
+    <div class="fields">
+      <label class="field">Tool calls<input type="number" class="f-calls" value="10000" min="100" max="10000000" step="1000"></label>
+      <label class="field">Wrapper compute, per call<input type="number" class="f-wrap" value="2" min="0" max="1000" step="1"></label>
+      <label class="field">Product backend, per call<input type="number" class="f-back" value="18" min="0" max="5000" step="1"></label>
+      <label class="field">Model inside the tool, per call<input type="number" class="f-vmodel" value="0" min="0" max="100000" step="100"></label>
+    </div>
+    <div class="fields">
+      <label class="field">Client model input (M tokens)<input type="number" class="f-in" value="12" min="0" max="100000" step="1"></label>
+      <label class="field">Client model output (M tokens)<input type="number" class="f-out" value="2" min="0" max="100000" step="1"></label>
+      <label class="field">Input price, per M tokens<input type="number" class="f-pin" value="500000" min="0" max="100000000" step="50000"></label>
+      <label class="field">Output price, per M tokens<input type="number" class="f-pout" value="1500000" min="0" max="100000000" step="50000"></label>
+    </div>
+    <div class="readout" data-out="read"></div>
+    <div class="bar" aria-hidden="true"><i data-out="bar"></i></div>
+    <p class="figcap" data-out="split"></p>
+    <p class="figcap">The same <code>estimateCost()</code> as Chapter 01. The <em>Model inside the tool</em> field is what the vendor pays per call for inference. The per-call figures for the two summary presets are illustrative placeholders, not prices of any real model.</p>
+  </div></div>
+  <p>With no model in the tool, the vendor share is a couple of percent. Add even a small model and the vendor pays for inference on every call, and the vendor share climbs from a rounding error to a large part of the total. This is the practical reason to be deliberate: a server-owned model turns a cheap read into a metered product, and you need to price it like one.</p>
+  <div class="tbl-wrap"><table><thead><tr><th scope="col">If the tool contains a model…</th><th scope="col">It should…</th></tr></thead><tbody><tr><th scope="row" class="lbl">Its job is synthesis (the product itself)</th><td>Say so in the description, and return the <strong>model name, usage and cost</strong> where the caller needs them</td></tr><tr><th scope="row" class="lbl">It produces claims about data</th><td>Return <strong>citations</strong> to the source rows, and the freshness of what it read</td></tr><tr><th scope="row" class="lbl">It can run long or expensive</th><td>Enforce a <strong>deadline and a token budget</strong>, and expose them as arguments the caller can lower</td></tr><tr><th scope="row" class="lbl">It reads untrusted text</th><td>Treat that text as data, never as instructions, and label the output as model-generated</td></tr><tr><th scope="row" class="lbl">It would decide what to call next</th><td><strong>Not exist.</strong> Return to the host and let it orchestrate, in view</td></tr></tbody></table></div>
+  <div class="callout"><span class="tag">The visibility test</span><p>After a call finishes, can the host tell how many model calls happened inside it, what they cost, what data they saw and why it stopped? If not, the model is hidden orchestration, and you will not be able to explain a bad answer or a surprising bill.</p></div>
+
+</section>
+
+<!-- ============ 09 ============ -->
+<section class="chapter" id="ch09">
+  <div class="eyebrow">Chapter 09 · Composition and the future</div>
+  <h2>Server composition</h2>
+  <p class="lede">An MCP server that calls another MCP server adds a hop. Each hop must be paid for in latency and in ways to fail.</p>
+
+  <div class="callout "><span class="tag">Partly in the repo</span><p><code>nextHop()</code> is in <code>src/production.ts</code> and now has a caller: the composite <code>draft_release_note</code> tool in this server (MCP 103, Chapter 08). There is still no gateway or second server to compose with, so the cross-server case is design.</p></div>
+  <p>Composition is the pattern where a gateway, or a higher-level server, calls other MCP servers to fulfil one request. It is right for two cases: a <strong>gateway</strong>, whose whole job is to sit in the middle, and a <strong>stable high-level transaction</strong>, a workflow that always runs the same way, exposed as one tool. Each hop must carry the caller’s subject and scopes, a trace id, the shared deadline, the remaining budget and the route so far, and must cap depth and refuse cycles. That is what <code>nextHop()</code> checks, and MCP 103 Chapter 08 has a simulator for it:</p>
+  <div class="run"><div class="run-hd"><span>Captured run</span><span>captured 2026-09-20</span></div><pre tabindex="0"><code><span class="t-k">$ </span>nextHop() along a chain (from MCP 103)
+b: ok budget=7 visited=a&gt;b
+c: ok budget=4 visited=a&gt;b&gt;c
+a: RECURSION
+d: BUDGET_EXCEEDED  (cost 5, budget 4)
+e: ok budget=3 visited=a&gt;b&gt;c&gt;e
+f: ok budget=2 visited=a&gt;b&gt;c&gt;e&gt;f
+g: HOP_LIMIT</code></pre></div>
+  <p>What a check like that cannot do is make a hop <em>free</em>. Every hop multiplies two things you cannot budget away:</p>
+  <div class="panel sim" id="sim-chain"><div class="panel-hd"><h3 class="ph">Interactive · What each hop costs</h3></div><div class="panel-bd">
+    <div class="fields">
+      <label class="field">Extra hops <output id="ch-n-o">2</output><input type="range" id="ch-n" min="0" max="5" value="2"></label>
+      <label class="field">Availability of each server (%)<input type="number" id="ch-a" value="99.9" min="90" max="100" step="0.05"></label>
+      <label class="field">p95 latency of each hop (ms)<input type="number" id="ch-l" value="200" min="10" max="10000" step="10"></label>
+    </div>
+    <div class="readout" id="ch-read"></div>
+    <p class="figcap">Serial chain of independent servers. Availability multiplies; the latency figure is the <em>sum of the individual p95s</em>, which overstates the p95 of the total but is the safe number to plan a timeout around. Plain arithmetic, not a repo function.</p></div></div>
+  <p>At three-nines per server, a chain of four (the caller’s server plus three hops) is available roughly 99.6 percent of the time, which is several hours of downtime a month where each part alone would have had under an hour. And its latency budget is four times one server’s. Neither figure appears on any hop’s dashboard.</p>
+  <ul>
+    <li><strong>Prefer a direct call inside a product-owned server.</strong> If your server owns the tasks and the knowledge base, call the product functions. Another MCP hop adds no independent boundary, only latency and a token exchange.</li>
+    <li><strong>Use audience-specific tokens</strong> per hop, and keep approval at the trusted host for anything consequential.</li>
+    <li><strong>Protocol uniformity is not a reason.</strong> That both ends speak MCP does not justify the extra hop.</li>
+    <li><strong>Make the route visible</strong> in what you return, so a caller can see which servers touched their request.</li>
+  </ul>
+  <div class="callout"><span class="tag">Where composition earns its place</span><p>When the hop crosses a <em>real boundary</em>: a different organisation, a different trust domain, a product you do not own. Then the extra token exchange and the extra network call are the point, not a cost. Inside one product’s walls they are only overhead.</p></div>
+
+</section>
+
+<!-- ============ 10 ============ -->
+<section class="chapter" id="ch10">
+  <div class="eyebrow">Chapter 10 · Composition and the future</div>
+  <h2>A forecast, with triggers</h2>
+  <p class="lede">Some of this is buildable today. Some is likely. Some is a hope. Say which, and say what would change your mind.</p>
+
+  <div class="callout "><span class="tag">Design chapter</span><p>This chapter is a set of judgements, not results. The two things the repository can support are a router and a cost model. Everything below is framed as a hypothesis with something to measure.</p></div>
+  <div class="panel" data-w="tabs"><div class="panel-hd"><h3 class="ph">Interactive · Current, likely, speculative</h3></div><div class="panel-bd"><section data-tab="Current"><p><span class="chip ok">buildable now</span></p><ul><li><strong>Stateless requests.</strong> The 2026-07-28 protocol carries context on each request, so any replica serves it and serverless hosting is straightforward.</li><li><strong>Durable task patterns.</strong> A jobs table with leases (MCP 103) and the protocol’s <code>tasks/*</code> methods for polling long work.</li><li><strong>Plan entitlements</strong> applied after identity is known.</li><li><strong>Gateways and tool-catalogue search</strong> as ordinary engineering: OAuth, policy, audit and retrieval over a verified catalogue.</li><li><strong>Model-backed tools</strong> where synthesis is the product.</li></ul><p><em>Evidence to hold yourself to:</em> each of these works in production somewhere. None needs a new protocol feature.</p></section><section data-tab="Likely"><p><span class="chip warn">probably, as agent traffic grows</span></p><ul><li><strong>Enterprise gateways</strong> as the normal way an organisation exposes and governs its servers.</li><li><strong>Verified catalogues</strong> with signed publisher identity, so a host can decide whom to trust.</li><li><strong>Per-tool metering</strong>, so cost attaches to a capability rather than to a whole server.</li><li><strong>Priority classes</strong> for different customers on the same surface (Chapter 02).</li><li><strong>Policy-aware retrieval</strong> that filters by entitlement before ranking (Chapter 05).</li><li><strong>Route telemetry</strong> strong enough to answer &ldquo;why did this go there?&rdquo; (Chapter 04).</li></ul><p><em>What would change my mind:</em> if hosts standardise on connecting to a handful of servers directly, gateways matter less.</p></section><section data-tab="Speculative"><p><span class="chip no">a hope, not a plan</span></p><ul><li><strong>Broad automatic substitution across competing products.</strong> It works for models. For tools, different semantics, delegated auth and side effects make it much harder (Chapter 06).</li><li><strong>Many near-identical fast and slow servers</strong> chosen by a model. Discovery and selection get worse, not better (Chapter 02).</li></ul><p><em>What would change my mind:</em> a widely used way to declare and verify semantic equivalence between independent tools. Nothing here provides it.</p></section></div></div>
+  <h3>Turn each into a measurement</h3>
+  <p>A forecast you cannot check is an opinion. For each thing you might build, name the number that would tell you it has paid, and the number that would tell you it has not.</p>
+  <div class="tbl-wrap"><table><thead><tr><th scope="col">Question</th><th scope="col">Measure</th><th scope="col">Read it as</th></tr></thead><tbody><tr><th scope="row" class="lbl">Do we need a gateway?</th><td>Number of servers a host must be configured with; time to onboard one</td><td>Rising fast means a catalogue and one policy point are earning their keep</td></tr><tr><th scope="row" class="lbl">Is a slow lane worth it?</th><td>Volume of calls that can wait, times per-call saving, against the lane’s fixed cost (Chapter 03)</td><td>Below break-even, do not build it</td></tr><tr><th scope="row" class="lbl">Is tool retrieval helping?</th><td>Selection error rate: wrong or missing tool, before and after</td><td>No change means it is adding a moving part</td></tr><tr><th scope="row" class="lbl">Are we spending on the right thing?</th><td>Cost per <em>successful workflow</em>, split vendor and client (Chapter 01)</td><td>Per call hides retries and dead ends</td></tr><tr><th scope="row" class="lbl">Is a hop justified?</th><td>p95 latency and availability of the whole chain (Chapter 09)</td><td>Each hop must buy a real boundary</td></tr><tr><th scope="row" class="lbl">Is it working for people?</th><td>Support incidents attributable to routing or refusals</td><td>A refusal that confuses is a cost too</td></tr></tbody></table></div>
+  <div class="callout"><span class="tag">The through-line of the series</span><p>MCP 101 drew a boundary. 102 built across it. 103 kept the building standing under load. 104 argues about what to put in front of it. The same rule held every time: a layer is allowed to help, and never to decide what only the layer beneath it can know. Retrieval helps and does not authorise. A gateway routes and does not impersonate. A router picks and refuses to guess.</p></div>
+
+</section>
+
+<!-- ============ 11 ============ -->
+<section class="chapter" id="ch11">
+  <div class="eyebrow">Chapter 11 · Check yourself</div>
+  <h2>Check yourself</h2>
+  <p class="lede">Eight questions. The explanations do the teaching.</p>
+
+  <div class="panel" data-w="quiz" data-src="qz-104"><div class="panel-hd"><h3 class="ph">Interactive · Knowledge check</h3><div class="qz-tools"><span class="qz-score" aria-live="polite">0 / 8</span><button class="btn ghost qz-reset" type="button">Start over</button></div></div><div class="panel-bd qz-body"></div><script type="application/json" id="qz-104">[{"q":"With the lab’s placeholder numbers, the vendor side is about two percent of the total cost. What is the safest conclusion?","o":["MCP servers are always cheap","For a cheap read with these inputs, client model tokens dominate; change the inputs before generalising","The vendor should raise prices"],"a":1,"w":"The figures are the author’s placeholders. The durable point is structural: two ledgers, in different hands, that must be compared using a common unit and volume."},{"q":"\u003ccode>lookalike-fast\u003c/code> is cheaper and faster than the standard provider and advertises the same capability. Why is it not chosen for a \u003ccode>teamspace-v1\u003c/code> operation?","o":["It is unavailable","Its semantic contract is \u003ccode>other-v2\u003c/code>, and the router matches contracts before comparing price","It has no write support"],"a":1,"w":"The semantic check comes before cost in \u003ccode>route()\u003c/code>. A fast wrong answer is worse than a slower right one."},{"q":"The standard provider is down and the caller’s cost ceiling is 50. The priority provider costs 90. What does the router do?","o":["Picks priority anyway","Returns a refusal with reasons","Picks the batch provider"],"a":1,"w":"Cost ceiling is a hard constraint. The router refuses a silent overspend. Raising the ceiling is a decision for a person or a policy."},{"q":"When does a slow lane pay for itself?","o":["Whenever the tool is slow","When volume times the per-call saving exceeds the cost of running a second path","Only for read operations"],"a":1,"w":"Delaying a cheap lookup rarely recovers the fixed cost of a second tier. It pays for batchable, expensive work such as GPU inference, exports and indexing."},{"q":"A host hides \u003ccode>create_task\u003c/code> from a viewer using retrieval. Is the server now safe to skip the role check?","o":["Yes, the tool cannot be called","No. Retrieval narrows what the model sees; the server must still authorise every call","Yes, if the description says viewers are read-only"],"a":1,"w":"A hidden tool can still be named. Retrieval is a filter for attention, not a lock."},{"q":"A gateway calls every downstream server using its own service credential. What is the main risk?","o":["Higher latency","A confused deputy: users can obtain anything the gateway can","Tokens expire sooner"],"a":1,"w":"Downstream servers see only the gateway, so per-user permissions vanish. Carry the original subject with an audience-bound token instead."},{"q":"A tool takes a goal and decides for itself which other tools to call, using a model. What is the objection?","o":["Models are too slow","It is hidden orchestration: unbounded cost and latency that the host cannot see or explain","It cannot be tested"],"a":1,"w":"If synthesis is the product, a model inside a tool is fine. Orchestration belongs in the host, where it is visible and can be approved."},{"q":"Four servers in a serial chain each have 99.9 percent availability. Roughly what is the chain’s availability?","o":["99.9%","About 99.6%","About 99.99%"],"a":1,"w":"Availabilities of independent serial hops multiply: 0.999 to the fourth power is about 0.996. Several extra hours of downtime a month."}]</script></div>
+  <p>Missed one? Costs in 01, tiers in 02, slow lanes in 03, gateways in 04, retrieval in 05, semantic routing in 06, auth in 07, models in tools in 08, and chains in 09.</p>
+
+</section>
+
+<div class="nextcourse"><div><small>Continue the series</small><strong>Return to the protocol foundation</strong></div><a href="https://tech.anujsadani.in/mcp-101/">Open MCP 101 →</a></div>
+
+</main>
+</div>
+</div>
+
+<script>
+(function(){
+"use strict";
+/* ---------- shared runtime: helpers ---------- */
+var $ = function (s, r) { return (r || document).querySelector(s); };
+var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+var esc = function (s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
+var el = function (tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+var btn = function (label, cls) { var b = el("button", cls || "btn ghost"); b.type = "button"; b.textContent = label; return b; };
+
+/* sha-256 (sync, tiny) for the fingerprint demos: the server hashes with node:crypto */
+function sha256(str) {
+  var K = [], H = [], i, j;
+  function rr(x, n) { return (x >>> n) | (x << (32 - n)); }
+  var p = 2, c = 0;
+  while (c < 64) { var ok = true; for (j = 2; j * j <= p; j++) if (p % j === 0) { ok = false; break; } if (ok) { K[c] = (Math.pow(p, 1 / 3) * 4294967296) | 0; if (c < 8) H[c] = (Math.pow(p, 1 / 2) * 4294967296) | 0; c++; } p++; }
+  var bytes = unescape(encodeURIComponent(str)), l = bytes.length, w = [];
+  for (i = 0; i < l; i++) w[i >> 2] |= bytes.charCodeAt(i) << (24 - (i % 4) * 8);
+  w[l >> 2] |= 0x80 << (24 - (l % 4) * 8);
+  w[(((l + 8) >> 6) << 4) + 15] = l * 8;
+  for (var o = 0; o < w.length; o += 16) {
+    var a = H.slice(0), t = [];
+    for (i = 0; i < 64; i++) {
+      if (i < 16) t[i] = w[o + i] | 0;
+      else { var s0 = rr(t[i - 15], 7) ^ rr(t[i - 15], 18) ^ (t[i - 15] >>> 3), s1 = rr(t[i - 2], 17) ^ rr(t[i - 2], 19) ^ (t[i - 2] >>> 10); t[i] = (t[i - 16] + s0 + t[i - 7] + s1) | 0; }
+      var S1 = rr(a[4], 6) ^ rr(a[4], 11) ^ rr(a[4], 25), ch = (a[4] & a[5]) ^ (~a[4] & a[6]), t1 = (a[7] + S1 + ch + K[i] + t[i]) | 0;
+      var S0 = rr(a[0], 2) ^ rr(a[0], 13) ^ rr(a[0], 22), mj = (a[0] & a[1]) ^ (a[0] & a[2]) ^ (a[1] & a[2]), t2 = (S0 + mj) | 0;
+      a = [(t1 + t2) | 0, a[0], a[1], a[2], (a[3] + t1) | 0, a[4], a[5], a[6]];
+    }
+    for (i = 0; i < 8; i++) H[i] = (H[i] + a[i]) | 0;
+  }
+  return H.map(function (x) { return ("00000000" + (x >>> 0).toString(16)).slice(-8); }).join("");
+}
+/* same canonicalisation as src/policy.ts fingerprint(): sorted keys, recursively */
+function canonical(x) { return Array.isArray(x) ? x.map(canonical) : x && typeof x === "object" ? Object.keys(x).sort().reduce(function (o, k) { o[k] = canonical(x[k]); return o; }, {}) : x; }
+function fingerprint(v) { return sha256(JSON.stringify(canonical(v))); }
+
+/* ---------- rail highlighting ---------- */
+var links = $$(".rail a");
+if ("IntersectionObserver" in window) {
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) {
+      if (!en.isIntersecting) return;
+      links.forEach(function (a) { var on = a.getAttribute("href") === "#" + en.target.id; a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "location"); else a.removeAttribute("aria-current"); });
+    });
+  }, { rootMargin: "-15% 0px -70% 0px" });
+  $$("main .chapter").forEach(function (s) { io.observe(s); });
+}
+
+/* ---------- tabs: every <section data-tab> is readable without JS ---------- */
+$$('[data-w="tabs"]').forEach(function (root) {
+  var secs = $$("section[data-tab]", root);
+  if (secs.length < 2) return;
+  var seg = el("div", "seg"); seg.setAttribute("role", "group"); seg.setAttribute("aria-label", "Choose a view");
+  var bs = secs.map(function (s, i) {
+    var b = el("button"); b.type = "button"; b.textContent = s.getAttribute("data-tab"); b.setAttribute("aria-pressed", String(i === 0)); s.hidden = i !== 0;
+    b.addEventListener("click", function () { bs.forEach(function (x, j) { x.setAttribute("aria-pressed", String(x === b)); secs[j].hidden = x !== b; }); });
+    seg.appendChild(b); return b;
+  });
+  $(".panel-hd", root).appendChild(seg);
+});
+
+/* ---------- trace: step through a flow, frames accumulate in the wire tap ---------- */
+$$('[data-w="trace"]').forEach(function (root) {
+  var lanes = JSON.parse($(".lanes", root).getAttribute("data-lanes"));
+  var items = $$("ol.steps > li", root), i = -1;
+  var laneBox = $(".lanes", root);
+  laneBox.innerHTML = lanes.map(function (l) { return '<div class="lane ' + l.c + '" data-id="' + l.id + '"><b>' + esc(l.t) + "</b><span>" + esc(l.s || "") + "</span></div>"; }).join("");
+  var ctl = el("div", "ctl"), reset = btn("Reset"), back = btn("← Back"), next = btn("Next step →", "btn");
+  ctl.appendChild(reset); ctl.appendChild(back); ctl.appendChild(next);
+  $(".panel-hd", root).appendChild(ctl);
+  var view = el("div", "tv", '<p class="tv-count"></p><p class="tv-title"></p><p class="tv-desc"></p><p class="tv-badge"></p><div class="tap"><div class="tap-hd">Wire tap · frames so far</div><div class="tap-bd" tabindex="0"></div></div>');
+  laneBox.insertAdjacentElement("afterend", view);
+  root.classList.add("js");
+  function render() {
+    var tap = $(".tap-bd", view);
+    $$(".lane", laneBox).forEach(function (n) { n.classList.toggle("on", i >= 0 && n.getAttribute("data-id") === items[i].getAttribute("data-lane")); });
+    if (i < 0) {
+      $(".tv-count", view).textContent = "Not started"; $(".tv-title", view).textContent = "Nothing has happened yet";
+      $(".tv-desc", view).textContent = "Press Next step. Each step lights the layer that acts and adds its frames to the tap."; $(".tv-badge", view).innerHTML = "";
+      tap.innerHTML = '<p class="figcap empty">Empty. Nothing has been sent.</p>';
+    } else {
+      var it = items[i], tone = it.getAttribute("data-tone"), badge = it.getAttribute("data-badge");
+      $(".tv-count", view).textContent = "Step " + (i + 1) + " of " + items.length;
+      $(".tv-title", view).innerHTML = $(".st", it).innerHTML; $(".tv-desc", view).innerHTML = $(".sd", it).innerHTML;
+      $(".tv-badge", view).innerHTML = badge ? '<span class="key ' + tone + '" style="font-size:10px">' + esc(badge) + "</span>" : "";
+      var out = [];
+      items.slice(0, i + 1).forEach(function (s, j) {
+        $$(".fr", s).forEach(function (f) {
+          var c = f.cloneNode(true); if (j !== i) c.classList.add("old");
+          var tg = $(".frame-tag", c); tg.textContent = (j + 1) + " · " + tg.textContent; out.push(c);
+        });
+      });
+      tap.innerHTML = ""; if (!out.length) tap.innerHTML = '<p class="figcap empty">No frame on the wire at this step: the work happens inside a process.</p>';
+      out.forEach(function (c) { tap.appendChild(c); });
+      var last = tap.lastElementChild; if (last && out.length > 1) tap.scrollTop = last.offsetTop - 12;
+    }
+    back.disabled = i < 0; next.disabled = i >= items.length - 1;
+  }
+  next.addEventListener("click", function () { if (i < items.length - 1) { i++; render(); } });
+  back.addEventListener("click", function () { if (i >= 0) { i--; render(); } });
+  reset.addEventListener("click", function () { i = -1; render(); });
+  render();
+});
+
+/* ---------- quiz ---------- */
+$$('[data-w="quiz"]').forEach(function (root) {
+  var qs = JSON.parse($("#" + root.getAttribute("data-src")).textContent), body = $(".qz-body", root), score = $(".qz-score", root), done = {};
+  function paint() {
+    body.innerHTML = "";
+    qs.forEach(function (q, qi) {
+      var box = el("div", "qz-q"); box.appendChild(el("p", "qz-t", "<b>" + (qi + 1) + ".</b> " + q.q));
+      var g = el("div", "qz-o"); g.setAttribute("role", "group"); g.setAttribute("aria-label", "Answers to question " + (qi + 1));
+      var why = el("p", "qz-why"); why.hidden = true; why.setAttribute("role", "status");
+      q.o.forEach(function (o, oi) {
+        var b = el("button", "", esc(o)); b.type = "button";
+        b.addEventListener("click", function () {
+          if (done[qi] !== undefined) return; done[qi] = oi;
+          $$("button", g).forEach(function (x, xi) { x.disabled = true; if (xi === q.a) x.classList.add("right"); if (xi === oi) x.classList.add("pick"); if (xi === oi && oi !== q.a) x.classList.add("wrong"); });
+          why.innerHTML = "<b>" + (oi === q.a ? "Correct" : "Not quite") + ".</b> " + q.w; why.hidden = false; tally();
+        });
+        g.appendChild(b);
+      });
+      box.appendChild(g); box.appendChild(why); body.appendChild(box);
+    });
+  }
+  function tally() { var n = 0; Object.keys(done).forEach(function (k) { if (done[k] === qs[k].a) n++; }); score.textContent = n + " / " + qs.length; }
+  $(".qz-reset", root).addEventListener("click", function () { done = {}; tally(); paint(); });
+  paint();
+});
+
+/* ================= MCP 104 simulators: ports of src/economics.ts, plus plain arithmetic ================= */
+function readout(target, items) { target.innerHTML = items.map(function (i) { return "<div><small>" + esc(i[0]) + "</small><strong>" + esc(i[1]) + "</strong></div>"; }).join(""); }
+var fmt = function (n) { return Math.round(n).toLocaleString("en-US"); };
+
+/* ---------- estimateCost(), mounted on every data-sim="cost" ---------- */
+$$('[data-sim="cost"]').forEach(function (root) {
+  var q = function (c) { return $("." + c, root); }, out = function (n) { return $('[data-out="' + n + '"]', root); };
+  var presets = JSON.parse(root.getAttribute("data-presets"));
+  function val(c) { return Math.max(0, +q(c).value || 0); }
+  function paint() {
+    var calls = val("f-calls"), wrap = val("f-wrap"), back = val("f-back"), vm = val("f-vmodel");
+    var vendorPerCall = wrap + back + vm, vendorTotal = calls * vendorPerCall;
+    var clientModel = Math.round(val("f-in") * 1e6 * val("f-pin") / 1e6 + val("f-out") * 1e6 * val("f-pout") / 1e6);
+    var total = vendorTotal + clientModel, vs = Number((vendorTotal / (total || 1)).toFixed(3)), cs = Number((clientModel / (total || 1)).toFixed(3));
+    readout(out("read"), [["Vendor, per call", fmt(vendorPerCall)], ["Vendor, total", fmt(vendorTotal)], ["Client model", fmt(clientModel)], ["Everything", fmt(total)]]);
+    out("bar").style.width = (vs * 100) + "%";
+    out("split").textContent = "Vendor " + (vs * 100).toFixed(1) + "%  ·  client model " + (cs * 100).toFixed(1) + "%   (shares as estimateCost() returns them: " + vs + " / " + cs + ")";
+  }
+  function apply(p) { var m = { calls: "f-calls", wrap: "f-wrap", back: "f-back", vmodel: "f-vmodel", "in": "f-in", out: "f-out", pin: "f-pin", pout: "f-pout" }; Object.keys(m).forEach(function (k) { q(m[k]).value = p[k]; }); paint(); }
+  $$(".panel-hd [data-p]", root).forEach(function (b) { b.addEventListener("click", function () { apply(presets[+b.getAttribute("data-p")]); }); });
+  $$("input", root).forEach(function (i) { i.addEventListener("input", paint); });
+  paint();
+});
+
+/* ---------- route(), mounted on every data-sim="route" ---------- */
+var PROVIDERS = [
+  { id: "teamspace-standard-us", caps: ["task.search", "page.search"], sem: "teamspace-v1", writes: false, fresh: "live", res: "us", mode: "realtime", p95: 450, cost: 20 },
+  { id: "teamspace-priority-us", caps: ["task.search", "page.search", "task.write"], sem: "teamspace-v1", writes: true, fresh: "live", res: "us", mode: "realtime", p95: 120, cost: 90 },
+  { id: "teamspace-batch-eu", caps: ["page.search"], sem: "teamspace-v1", writes: false, fresh: "cached", res: "eu", mode: "task", p95: 8000, cost: 4 },
+  { id: "lookalike-fast", caps: ["task.search"], sem: "other-v2", writes: false, fresh: "live", res: "us", mode: "realtime", p95: 60, cost: 2 }
+];
+function routeReason(op, p, down) {
+  return down ? "unavailable"
+    : p.caps.indexOf(op.cap) < 0 ? "capability mismatch"
+    : p.sem !== op.sem ? "semantic contract mismatch"
+    : op.write && !p.writes ? "write unsupported"
+    : op.fresh === "live" && p.fresh !== "live" ? "freshness mismatch"
+    : op.res !== "any" && p.res !== op.res ? "residency mismatch"
+    : op.mode && p.mode !== op.mode ? "execution-mode mismatch"
+    : p.p95 > op.lat ? "latency SLO exceeded"
+    : p.cost > op.cost ? "cost ceiling exceeded" : "";
+}
+$$('[data-sim="route"]').forEach(function (root) {
+  var q = function (c) { return $("." + c, root); }, out = function (n) { return $('[data-out="' + n + '"]', root); };
+  var presets = JSON.parse(root.getAttribute("data-presets"));
+  function paint() {
+    var mode = q("r-mode").value, op = { cap: q("r-cap").value, sem: q("r-sem").value, write: q("r-write").checked, fresh: q("r-fresh").value, res: q("r-res").value, mode: mode === "(any)" ? "" : mode, lat: +q("r-lat").value, cost: +q("r-cost").value };
+    var down = {}; $$(".r-down", root).forEach(function (c) { down[c.getAttribute("data-id")] = c.checked; });
+    var rej = {}, ok = [];
+    PROVIDERS.forEach(function (p) { var r = routeReason(op, p, !!down[p.id]); if (r) rej[p.id] = r; else ok.push(p); });
+    ok.sort(function (a, b) { return a.cost - b.cost || a.p95 - b.p95 || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0); });
+    var sel = ok[0];
+    out("decision").innerHTML = sel
+      ? '<p><span class="chip ok">selected</span> <code>' + sel.id + "</code> · cheapest provider satisfying the explicit semantic, policy, freshness, residency, latency and trust contract.</p>"
+      : '<p><span class="chip no">refused</span> No provider satisfies every hard constraint; the router refuses a silent downgrade.</p>';
+    out("rows").innerHTML = PROVIDERS.map(function (p) {
+      var res = rej[p.id] ? '<span class="chip no">' + esc(rej[p.id]) + "</span>" : p === sel ? '<span class="chip ok">selected</span>' : '<span class="chip info">eligible, costlier</span>';
+      return "<tr><td>" + p.id + "</td><td>" + p.sem + "</td><td>" + p.mode + "</td><td>" + p.p95 + " ms</td><td>" + p.cost + "</td><td>" + res + "</td></tr>";
+    }).join("");
+  }
+  function apply(p) { q("r-cap").value = p.cap; q("r-sem").value = p.sem; q("r-fresh").value = p.fresh; q("r-res").value = p.res; q("r-mode").value = p.mode || "(any)"; q("r-write").checked = p.write; q("r-lat").value = p.lat; q("r-cost").value = p.cost; $$(".r-down", root).forEach(function (c) { c.checked = p.down.indexOf(c.getAttribute("data-id")) >= 0; }); paint(); }
+  $$(".panel-hd [data-p]", root).forEach(function (b) { b.addEventListener("click", function () { apply(presets[+b.getAttribute("data-p")]); }); });
+  $$("select, input", root).forEach(function (i) { i.addEventListener("input", paint); });
+  apply(presets[0]);
+});
+
+/* ---------- 03 · is the slow lane worth it? (plain arithmetic) ---------- */
+(function () {
+  if (!$("#sim-async")) return;
+  function paint() {
+    var vol = +$("#as-vol").value, share = +$("#as-share").value / 100, rt = +$("#as-rt").value, b = +$("#as-b").value, fix = +$("#as-fix").value;
+    $("#as-share-o").textContent = Math.round(share * 100) + "%";
+    var per = Math.max(0, (rt - b)) * share, saving = vol * per, net = saving - fix, be = per > 0 ? fix / per : Infinity;
+    readout($("#as-read"), [["Saving per call (all calls)", per.toFixed(2)], ["Monthly saving", fmt(saving)], ["Fixed cost of the lane", fmt(fix)], ["Break-even volume", be === Infinity ? "never" : fmt(be) + " calls/mo"]]);
+    $("#as-verdict").innerHTML = net > 0 ? '<span class="chip ok">pays</span> Net ' + fmt(net) + " micros a month." : '<span class="chip warn">does not pay</span> The saving is ' + fmt(saving) + " against " + fmt(fix) + " of fixed cost, a shortfall of " + fmt(-net) + ". Volume would have to reach " + (be === Infinity ? "an impossible level" : fmt(be)) + " calls a month.";
+  }
+  $$("#sim-async input").forEach(function (i) { i.addEventListener("input", paint); }); paint();
+})();
+
+/* ---------- 05 · tool retrieval (a toy) ---------- */
+(function () {
+  if (!$("#sim-retr")) return;
+  var TOOLS = [
+    ["search_tasks", "Search tasks in your team. Filter status=done for completed work. Results are paginated.", "read"],
+    ["get_task", "Read one task from your team by ID.", "read"],
+    ["create_task", "Create a task in your team. Reuse operationKey only to retry the same operation.", "write"],
+    ["update_task", "Change a task status using the last observed version; reload on conflict.", "write"],
+    ["search_pages", "Search knowledge page titles and text in your team.", "read"],
+    ["publish_page", "Publish an approved Markdown draft. Obtain approval in the trusted host UI, never invent approvalId.", "write"],
+    ["import_url", "Fetch bounded public HTTPS content for review. Returned text remains untrusted and is never published automatically.", "read"],
+    ["start_release_job", "Queue a durable release-report job for the signed-in actor.", "write"],
+    ["get_job", "Read one of your own background jobs.", "job"],
+    ["draft_release_note", "Draft release notes from completed tasks in one bounded call. Returns a draft only: nothing is published, and publishing still needs approval.", "read"],
+    ["explain_route", "Explain which compatible execution provider satisfies explicit policy and cost constraints. Never performs the routed operation.", "read"]
+  ];
+  var STOP = ["the", "and", "for", "our", "this", "that", "with", "what", "did", "how", "are", "was", "you", "can", "who", "any"];
+  function stem(w) { return w.length > 3 && w.charAt(w.length - 1) === "s" ? w.slice(0, -1) : w; }
+  function toks(s) { return s.toLowerCase().split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 3 && STOP.indexOf(w) < 0; }).map(stem); }
+  function hidden(who, kind, name) { return (who === "viewer" && kind === "write") || (who === "eve" && (name === "start_release_job" || name === "get_job")); }
+  function paint() {
+    var who = $("#rt-who").value, k = +$("#rt-k").value, pol = $("#rt-pol").checked, q = toks($("#rt-q").value);
+    $("#rt-k-o").textContent = k;
+    var rows = TOOLS.map(function (t, i) { var words = toks(t[0].replace(/_/g, " ") + " " + t[1]); var s = q.filter(function (w, j) { return q.indexOf(w) === j && words.indexOf(w) >= 0; }).length; return { i: i, name: t[0], desc: t[1], kind: t[2], score: s, hide: pol && hidden(who, t[2], t[0]) }; });
+    var ranked = rows.filter(function (r) { return !r.hide; }).sort(function (a, b) { return b.score - a.score || a.i - b.i; });
+    var shown = {}; ranked.slice(0, k).forEach(function (r) { shown[r.name] = true; });
+    var total = TOOLS.reduce(function (n, t) { return n + t[1].length; }, 0), used = rows.reduce(function (n, r) { return n + (shown[r.name] ? r.desc.length : 0); }, 0);
+    readout($("#rt-read"), [["Tools shown", Object.keys(shown).length + " of " + TOOLS.length], ["Description text sent", fmt(used) + " of " + fmt(total) + " chars"], ["Context not spent", Math.round((1 - used / total) * 100) + "%"]]);
+    $("#rt-rows").innerHTML = rows.slice().sort(function (a, b) { return b.score - a.score || a.i - b.i; }).map(function (r) {
+      return "<tr><td>" + r.name + "</td><td>" + r.score + '</td><td><span class="chip ' + (r.hide ? "no" : shown[r.name] ? "ok" : "info") + '">' + (r.hide ? "hidden by host policy" : shown[r.name] ? "shown" : "ranked below the cut") + "</span></td></tr>";
+    }).join("");
+  }
+  $("#rt-call").addEventListener("click", function () {
+    var who = $("#rt-who").value, t = $("#rt-try").value, kind = TOOLS.filter(function (x) { return x[0] === t; })[0][2], o = $("#rt-try-out"), c = function (cls, l, x) { o.innerHTML = '<span class="chip ' + cls + '">' + esc(l) + "</span> " + esc(x); };
+    if (who === "viewer" && kind === "write") return c("no", "FORBIDDEN", "Your role can read but cannot change this team’s work. The server refuses whether or not the host showed the tool.");
+    if (who === "eve" && t === "start_release_job") return c("no", "PLAN_REQUIRED", "Background jobs requires the Pro plan. Data permissions still apply.");
+    if (t === "publish_page") return c("no", "APPROVAL_REQUIRED", "Review and approve this exact operation again. (No approval was presented.)");
+    c("ok", "allowed", "The call runs, scoped to " + who + "’s own organisation and team.");
+  });
+  $$("#sim-retr input, #sim-retr select").forEach(function (i) { i.addEventListener("input", paint); }); paint();
+})();
+
+/* ---------- 09 · what a chain costs ---------- */
+(function () {
+  if (!$("#sim-chain")) return;
+  function paint() {
+    var n = +$("#ch-n").value, a = +$("#ch-a").value / 100, l = +$("#ch-l").value; $("#ch-n-o").textContent = n;
+    var servers = n + 1, avail = Math.pow(a, servers), down = (1 - avail) * 30 * 24 * 60;
+    readout($("#ch-read"), [["Servers in the chain", servers], ["Availability", (avail * 100).toFixed(3) + "%"], ["Downtime per 30 days", Math.floor(down / 60) + " h " + Math.round(down % 60) + " min"], ["Latency to plan for", fmt(servers * l) + " ms"]]);
+  }
+  $$("#sim-chain input").forEach(function (i) { i.addEventListener("input", paint); }); paint();
+})();
+
+})();
+</script>
 </body>
 </html>

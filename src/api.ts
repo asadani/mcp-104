@@ -4,7 +4,7 @@ import type { Sql } from './db.js';
 import { Identity } from './auth.js';
 import { actor, Fault } from './policy.js';
 import { Product } from './product.js';
-import { retry } from './resilience.js';
+import { retry, CircuitBreaker } from './resilience.js';
 
 export const errors:ErrorRequestHandler=(error,_req,res,_next)=>{
   const fault=error instanceof Fault?error:new Fault('INVALID_INPUT',error?.name==='ZodError'?'Arguments do not match the schema. Check required fields and ranges.':'The request could not be completed.',error?.name==='ZodError'?400:500);
@@ -28,18 +28,22 @@ export async function startApi(kind:'tasks'|'knowledge',db:Sql,identity:Identity
   return listen(app,port);
 }
 export class Downstream {
-  constructor(public urls:{tasks:string;knowledge:string},public identity:Identity){}
+  // One breaker per product API, shared by every request this process serves.
+  private breakers:Record<'tasks'|'knowledge',CircuitBreaker>;
+  constructor(public urls:{tasks:string;knowledge:string},public identity:Identity,breaker:{threshold?:number;recoveryMs?:number}={}){
+    this.breakers={tasks:new CircuitBreaker(breaker.threshold,breaker.recoveryMs),knowledge:new CircuitBreaker(breaker.threshold,breaker.recoveryMs)};
+  }
   async call(subject:string,operation:string,args:unknown,deadline=Date.now()+5000) {
     const kind=['search_tasks','get_task','create_task','update_task'].includes(operation)?'tasks':'knowledge';
     const token=await this.identity.issue(subject,kind);
     // A freshly scoped downstream token is used; the incoming MCP token is never forwarded.
-    return retry(async signal=>{
+    return this.breakers[kind].run(()=>retry(async signal=>{
       let response:Response;
       try {response=await fetch(`${this.urls[kind]}/invoke/${operation}`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify(args),signal});}
       catch{throw new Fault('DEPENDENCY_UNAVAILABLE','The product service is unavailable.',503,true);}
       const body=await response.json() as any;
       if(!response.ok) throw new Fault(body.code,body.message,response.status,body.retryable);
       return body;
-    },{deadline,safe:operation.startsWith('search_')||operation.startsWith('read_')||operation==='get_task'});
+    },{deadline,safe:operation.startsWith('search_')||operation.startsWith('read_')||operation==='get_task'}),e=>e instanceof Fault&&e.status>=500);
   }
 }

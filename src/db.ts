@@ -28,9 +28,12 @@ export async function migrate(db: Sql) {
     `CREATE TABLE IF NOT EXISTS operations (key text PRIMARY KEY, actor text NOT NULL, fingerprint text NOT NULL, result jsonb, created_at timestamptz NOT NULL DEFAULT now())`,
     `CREATE TABLE IF NOT EXISTS approvals (id text PRIMARY KEY, actor text NOT NULL, fingerprint text NOT NULL, expires_at timestamptz NOT NULL, used boolean NOT NULL DEFAULT false)`,
     `CREATE TABLE IF NOT EXISTS usage (org text PRIMARY KEY, spent integer NOT NULL DEFAULT 0, reserved integer NOT NULL DEFAULT 0, allowance integer NOT NULL DEFAULT 1000)`,
-    `CREATE TABLE IF NOT EXISTS reservations (id text PRIMARY KEY, org text NOT NULL, amount integer NOT NULL, actual integer, state text NOT NULL DEFAULT 'reserved')`,
-    `CREATE TABLE IF NOT EXISTS jobs (id text PRIMARY KEY, actor text NOT NULL, org text NOT NULL, status text NOT NULL, input jsonb NOT NULL, result jsonb, lease_until timestamptz, attempts integer NOT NULL DEFAULT 0, expires_at timestamptz NOT NULL DEFAULT now()+interval '1 day')`,
+    `CREATE TABLE IF NOT EXISTS reservations (id text PRIMARY KEY, org text NOT NULL, amount integer NOT NULL, actual integer, state text NOT NULL DEFAULT 'reserved', expires_at timestamptz NOT NULL DEFAULT now()+interval '5 minutes')`,
+    `CREATE TABLE IF NOT EXISTS jobs (id text PRIMARY KEY, actor text NOT NULL, org text NOT NULL, status text NOT NULL, input jsonb NOT NULL, result jsonb, lease_until timestamptz, lease_owner text, attempts integer NOT NULL DEFAULT 0, expires_at timestamptz NOT NULL DEFAULT now()+interval '1 day')`,
     `CREATE TABLE IF NOT EXISTS audit (id text PRIMARY KEY, actor text NOT NULL, org text NOT NULL, operation text NOT NULL, outcome text NOT NULL, trace_id text NOT NULL, created_at timestamptz NOT NULL DEFAULT now())`,
+    `ALTER TABLE reservations ADD COLUMN IF NOT EXISTS expires_at timestamptz NOT NULL DEFAULT now()+interval '5 minutes'`,
+    `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS lease_owner text`,
+    `CREATE TABLE IF NOT EXISTS rate_buckets (key text PRIMARY KEY, tokens double precision NOT NULL, at timestamptz NOT NULL)`,
   ]) await db.query(sql);
 }
 export async function seed(db: Sql) {

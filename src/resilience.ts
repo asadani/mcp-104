@@ -17,8 +17,13 @@ export async function retry<T>(work:(signal:AbortSignal)=>Promise<T>,options:{de
 export class CircuitBreaker {
   failures=0; openedAt=0;
   constructor(public threshold=3,public recoveryMs=1000){}
-  async run<T>(work:()=>Promise<T>) {
+  async run<T>(work:()=>Promise<T>,isFailure:(e:unknown)=>boolean=()=>true) {
     if(this.failures>=this.threshold && Date.now()-this.openedAt<this.recoveryMs) throw new Fault('CIRCUIT_OPEN','Dependency is recovering. Try again later.',503,true);
-    try {const r=await work();this.failures=0;return r;} catch(e){this.failures++;this.openedAt=Date.now();throw e;}
+    try {const r=await work();this.failures=0;return r;}
+    catch(e) {
+      // A definite answer from a healthy dependency (a 404, a refusal) is not an outage: it must not open the circuit.
+      if(isFailure(e)){this.failures++;this.openedAt=Date.now();} else this.failures=0;
+      throw e;
+    }
   }
 }

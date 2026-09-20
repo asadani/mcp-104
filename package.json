@@ -13,6 +13,7 @@
     "test": "tsx --test tests/*.test.ts",
     "lab": "tsx labs/economics.ts",
     "stdio": "tsx src/stdio.ts",
+    "worker": "tsx src/worker-main.ts",
     "test:ui": "playwright test",
     "format": "prettier --write src web tests labs",
     "format:check": "prettier --check src web tests labs"

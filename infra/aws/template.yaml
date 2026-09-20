@@ -1,9 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Optional MCP 103 App Runner teaching deployment
+Description: Optional Teamspace App Runner teaching deployment (written to the AWS::AppRunner::Service schema; not linted or deployed by the course)
 Parameters:
-  ImageUri: { Type: String }
-  DatabaseSecretArn: { Type: String }
+  ImageUri: { Type: String, Description: "ECR image built from the Dockerfile in this repository" }
+  DatabaseSecretArn: { Type: String, Description: "Secrets Manager secret whose value is a postgres:// connection string" }
+  TokenSecretArn: { Type: String, Description: "Secrets Manager secret holding the token verification secret (at least 32 characters)" }
+  PublicOrigin: { Type: String, Description: "The https origin clients use, for example https://mcp.example.com" }
 Resources:
+  # Lets App Runner pull the image. It does not read application secrets.
   AccessRole:
     Type: AWS::IAM::Role
     Properties:
@@ -11,13 +14,25 @@ Resources:
         Version: '2012-10-17'
         Statement: [{ Effect: Allow, Principal: { Service: build.apprunner.amazonaws.com }, Action: 'sts:AssumeRole' }]
       Policies:
-        - PolicyName: pull-and-read-secret
+        - PolicyName: pull-image
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - { Effect: Allow, Action: ['ecr:GetAuthorizationToken'], Resource: '*' }
               - { Effect: Allow, Action: ['ecr:BatchGetImage','ecr:GetDownloadUrlForLayer','ecr:BatchCheckLayerAvailability'], Resource: '*' }
-              - { Effect: Allow, Action: ['secretsmanager:GetSecretValue'], Resource: { Ref: DatabaseSecretArn } }
+  # The running service reads its secrets with this role.
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{ Effect: Allow, Principal: { Service: tasks.apprunner.amazonaws.com }, Action: 'sts:AssumeRole' }]
+      Policies:
+        - PolicyName: read-secrets
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - { Effect: Allow, Action: ['secretsmanager:GetSecretValue'], Resource: [{ Ref: DatabaseSecretArn }, { Ref: TokenSecretArn }] }
   Service:
     Type: AWS::AppRunner::Service
     Properties:
@@ -29,7 +44,21 @@ Resources:
           ImageRepositoryType: ECR
           ImageConfiguration:
             Port: '3102'
-            RuntimeEnvironmentVariables: { HOST: '0.0.0.0', NODE_ENV: 'production' }
-            RuntimeEnvironmentSecrets: { DATABASE_URL: { Ref: DatabaseSecretArn } }
+            RuntimeEnvironmentVariables:
+              - { Name: HOST, Value: '0.0.0.0' }
+              - { Name: NODE_ENV, Value: production }
+              - { Name: PUBLIC_ORIGIN, Value: { Ref: PublicOrigin } }
+            RuntimeEnvironmentSecrets:
+              - { Name: DATABASE_URL, Value: { Ref: DatabaseSecretArn } }
+              - { Name: TOKEN_SECRET, Value: { Ref: TokenSecretArn } }
+      InstanceConfiguration:
+        InstanceRoleArn: { 'Fn::GetAtt': [InstanceRole, Arn] }
+      HealthCheckConfiguration:
+        Protocol: HTTP
+        Path: /healthz
+        Interval: 10
+        Timeout: 5
+        HealthyThreshold: 1
+        UnhealthyThreshold: 5
 Outputs:
   ServiceUrl: { Value: { 'Fn::GetAtt': [Service, ServiceUrl] } }

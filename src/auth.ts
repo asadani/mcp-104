@@ -1,6 +1,6 @@
 import { randomBytes, createHash } from 'node:crypto';
 import { SignJWT, jwtVerify } from 'jose';
-import type { Express } from 'express';
+import type { Express, RequestHandler } from 'express';
 import { Fault } from './policy.js';
 
 export class Identity {
@@ -45,4 +45,21 @@ export class Identity {
       res.json({access_token:await this.issue(c.subject),token_type:'Bearer',expires_in:900});
     }catch(e){next(e);}});
   }
+}
+
+// The edge check for /mcp. It must run BEFORE the MCP handler. A Fault thrown from inside
+// createMcpHandler's factory is reported by the SDK as a 500 "Internal server error", so the
+// client would never receive the 401 challenge that tells it where to sign in.
+export function requireToken(identity: Identity, origin: string, audience = 'teamspace'): RequestHandler {
+  return async (req, res, next) => {
+    try {
+      await identity.subject(req.headers.authorization, audience);
+      next();
+    } catch {
+      res
+        .status(401)
+        .set('WWW-Authenticate', `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"`)
+        .json({ code: 'UNAUTHORIZED', message: 'Sign in to Teamspace.' });
+    }
+  };
 }
