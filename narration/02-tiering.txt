@@ -1,0 +1,13 @@
+Chapter two. Tiering.
+
+Should fast customers and slow customers get different servers? Almost never. They should get one server, and different treatment behind it.
+
+A common instinct is to publish a fast tasks server for paying customers and a slow one for everyone else. It looks tidy, and it causes real trouble. A model now sees two near identical tools and must choose between them from their names, which it will do badly. Every client has to know which to connect to. And the two drift apart. The cleaner design keeps one semantic surface, and applies quotas, priority, freshness, and entitlement after identity is known.
+
+Separate servers are right when the trust domain or the product differs: a payments server and a tasks server, or a European only deployment for data that cannot leave. They are wrong when the only difference is how fast you serve the same contract.
+
+The router works in two stages. First, every provider is tested against every constraint in a fixed order, and the first failing one is recorded as the reason. Is it available, verified, does it have the capability, the same semantic contract, can it write if a write is needed, is it fresh enough, in the right region, the right mode, fast enough, cheap enough. Then the survivors are sorted by cost, then latency, then name, and the first wins. If there are no survivors, the answer is a refusal with reasons.
+
+Try the presets on the page, and read the table underneath, which names the first reason each provider was rejected. Take the standard provider out of service, and the router falls over to the priority one. They share a contract, so the substitution is safe. It costs more, ninety against twenty, but fits the ceiling of one hundred. Now lower the ceiling to fifty, and nothing qualifies. The router returns a refusal rather than quietly spending more than the caller allowed. Whether to raise the ceiling is a decision for a person or a policy, not for the router. And a write selects the priority provider, because the standard one does not write.
+
+Where does the plan fit? Not in the router at all. It arrives as an input: a free customer's operations carry a lower cost ceiling and a higher latency tolerance, a priority customer's the opposite. The router stays a pure function of constraints, which is what makes it testable. Policy decides which constraints a caller gets.

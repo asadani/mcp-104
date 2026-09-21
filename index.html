@@ -420,6 +420,67 @@ figure{margin:0}
 .arch-v{display:none;max-width:400px;margin:6px auto}
 @media (max-width:640px){.arch-h{display:none}.arch-v{display:block}}
 .arch .al{font-family:var(--mono);font-size:12px;fill:var(--ink-2);letter-spacing:.02em;paint-order:stroke;stroke:var(--paper);stroke-width:4px;stroke-linejoin:round}
+
+/* ---------- narration player ---------- */
+/* Injected by script only when audio/ is present, so the page still stands
+   alone as a single file if you never generate the narration. */
+.aud{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  border:1px solid var(--rule);border-left:3px solid var(--wire);
+  background:var(--paper-2);padding:9px 14px;border-radius:2px;
+  margin:0 0 26px;max-width:66ch;
+}
+.aud-play{
+  flex:0 0 auto;width:30px;height:30px;padding:0;border-radius:50%;
+  border:1px solid var(--ink);background:var(--ink);color:var(--paper-2);
+  display:grid;place-items:center;font-size:11px;line-height:1;
+  transition:opacity .15s;
+}
+.aud-play:hover{opacity:.85}
+.aud-lbl{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3);flex:0 0 auto;
+}
+.aud.on .aud-lbl{color:var(--wire)}
+.aud-seek{flex:1 1 150px;min-width:120px;accent-color:var(--wire);height:16px;cursor:pointer}
+.aud-time{
+  font-family:var(--mono);font-size:11px;color:var(--ink-3);
+  flex:0 0 auto;font-variant-numeric:tabular-nums;
+}
+.aud-time b{color:var(--ink-2);font-weight:500}
+.aud-rate{
+  flex:0 0 auto;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;
+  border:1px solid var(--rule);background:transparent;color:var(--ink-2);
+  padding:4px 7px;border-radius:2px;min-width:42px;
+}
+.aud-rate:hover{background:var(--paper-3)}
+
+/* masthead control */
+.aud-intro{display:none;align-items:center;gap:14px;flex-wrap:wrap;margin-top:22px}
+.aud-intro.ready{display:flex}
+
+/* sticky bar, only while something is playing */
+.aud-bar{
+  position:fixed;left:50%;transform:translateX(-50%) translateY(140%);
+  bottom:16px;z-index:40;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  background:var(--ink);color:var(--paper-2);padding:9px 10px 9px 14px;border-radius:3px;
+  box-shadow:0 6px 22px rgba(20,28,26,.26);transition:transform .22s ease;
+  max-width:calc(100vw - 24px);
+}
+.aud-bar.up{transform:translateX(-50%) translateY(0)}
+.aud-bar .t{font-family:var(--mono);font-size:11px;letter-spacing:.06em;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:36vw}
+.aud-bar .t b{color:var(--paper);font-weight:500}
+.aud-bar button{
+  border:1px solid rgba(244,245,241,.34);background:transparent;color:var(--paper-2);
+  border-radius:2px;padding:4px 9px;font-family:var(--mono);font-size:11px;
+}
+.aud-bar button:hover{background:rgba(244,245,241,.14)}
+.aud-bar button[aria-pressed="true"]{background:var(--paper-2);color:var(--ink);border-color:var(--paper-2)}
+@media (max-width:520px){
+  .aud-bar .t{max-width:28vw}
+  .aud-seek{flex-basis:100%;order:5}
+}
 </style>
 </head>
 <body>
@@ -442,6 +503,7 @@ figure{margin:0}
     <span><b>PREREQ</b> MCP 103</span>
     <span><b>PROTOCOL</b> 2026-07-28</span>
     <span><b>READ</b> ~60 min</span>
+    <span id="aud-partno" hidden><b>LISTEN</b> <span id="aud-total">—</span></span>
   </div>
   <h1 class="title">Economics,<br>gateways <span class="thin">&amp; futures</span></h1>
   <p class="subtitle">MCP 103 made the server survive. This course asks what it costs, who should serve which request, and where the gateways, catalogues and model-backed tools people propose actually fit. One mechanism is implemented and tested; the rest is argued, and every chapter says which is which.</p>
@@ -450,6 +512,11 @@ figure{margin:0}
     <span class="key server">MCP server</span>
     <span class="key wire">Model</span>
     <span class="key prod">Product system</span>
+  </div>
+
+  <div class="aud-intro" id="aud-intro">
+    <button class="btn" id="aud-start">▶ Listen straight through</button>
+    <span class="figcap" id="aud-credit"></span>
   </div>
 </header>
 
@@ -1218,6 +1285,288 @@ function sha256(str) {
 /* same canonicalisation as src/policy.ts fingerprint(): sorted keys, recursively */
 function canonical(x) { return Array.isArray(x) ? x.map(canonical) : x && typeof x === "object" ? Object.keys(x).sort().reduce(function (o, k) { o[k] = canonical(x[k]); return o; }, {}) : x; }
 function fingerprint(v) { return sha256(JSON.stringify(canonical(v))); }
+
+/* AUDIO-MANIFEST:BEGIN · written by tools/generate-audio.py · do not hand-edit */
+var AUDIO = {
+  dir: "audio-kokoro/",
+  voice: "bm_george+bm_fable",
+  credit: "Synthetic voice, Kokoro-82M",
+  tracks: {
+    ch00: { f: "ch00.mp3", d: 145.4 },
+    ch01: { f: "ch01.mp3", d: 146.8 },
+    ch02: { f: "ch02.mp3", d: 146.3 },
+    ch03: { f: "ch03.mp3", d: 150.6 },
+    ch04: { f: "ch04.mp3", d: 172.7 },
+    ch05: { f: "ch05.mp3", d: 151.6 },
+    ch06: { f: "ch06.mp3", d: 155.4 },
+    ch07: { f: "ch07.mp3", d: 170.8 },
+    ch08: { f: "ch08.mp3", d: 164.8 },
+    ch09: { f: "ch09.mp3", d: 152.1 },
+    ch10: { f: "ch10.mp3", d: 177.2 },
+    ch11: { f: "ch11.mp3", d: 54.1 }
+  }
+};
+/* AUDIO-MANIFEST:END */
+
+/* ---------- narration ----------
+   One <audio> element shared by every chapter. The player strips are only
+   injected once a track has actually loaded, so a copy of this file without
+   the audio/ folder looks and behaves exactly as it did before. */
+(function(){
+  var order = Object.keys(AUDIO.tracks);
+  if(!order.length) return;
+
+  var RATES = [1, 1.25, 1.5, 0.9];
+  var store = {
+    get: function(k, d){ try { return localStorage.getItem(k) || d; } catch(e){ return d; } },
+    set: function(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
+  };
+
+  var el = new Audio();
+  el.preload = "metadata";
+  var rate = parseFloat(store.get("mcp-narration-rate", "1")) || 1;
+  var continuous = false;
+  var active = null;          // chapter id currently loaded
+  var strips = {};            // chapter id -> strip element
+
+  function clock(s){
+    if(!isFinite(s) || s < 0) s = 0;
+    var m = Math.floor(s / 60), r = Math.round(s % 60);
+    if(r === 60){ m += 1; r = 0; }
+    return m + ":" + (r < 10 ? "0" : "") + r;
+  }
+  function chapterTitle(id){
+    var h = document.querySelector("#" + id + " h2");
+    return h ? h.textContent.trim() : id;
+  }
+  function rateLabel(){
+    return (rate % 1 === 0 ? rate.toFixed(1) : String(rate)) + "&#215;";
+  }
+
+  /* ---- per-chapter strips ---- */
+  order.forEach(function(id){
+    var sec = document.getElementById(id);
+    if(!sec) return;
+    var track = AUDIO.tracks[id];
+
+    var strip = document.createElement("div");
+    strip.className = "aud";
+    strip.setAttribute("data-ch", id);
+    strip.innerHTML =
+      '<button class="aud-play" aria-label="Play narration for ' + esc(chapterTitle(id)) + '">&#9654;</button>' +
+      '<span class="aud-lbl">Listen</span>' +
+      '<input class="aud-seek" type="range" min="0" max="1000" value="0" step="1"' +
+        ' aria-label="Seek within narration">' +
+      '<span class="aud-time"><b>0:00</b> / ' + clock(track.d) + '</span>' +
+      '<button class="aud-rate" aria-label="Playback speed">' + rateLabel() + '</button>';
+
+    // under the lede if there is one, otherwise straight under the heading
+    var anchor = null;
+    [".lede", "h2", ".eyebrow"].some(function(sel){
+      var el = sec.querySelector(sel);
+      if(el && el.parentNode === sec){ anchor = el; return true; }
+      return false;
+    });
+    if(anchor) sec.insertBefore(strip, anchor.nextSibling);
+    else sec.insertBefore(strip, sec.firstChild);
+    strips[id] = strip;
+  });
+
+  /* ---- sticky bar ---- */
+  var bar = document.createElement("div");
+  bar.className = "aud-bar";
+  bar.innerHTML =
+    '<span class="t">Now playing · <b></b></span>' +
+    '<button data-a="prev" aria-label="Previous chapter">&#8592;</button>' +
+    '<button data-a="toggle" aria-label="Pause">&#10073;&#10073;</button>' +
+    '<button data-a="next" aria-label="Next chapter">&#8594;</button>' +
+    '<button data-a="cont" aria-pressed="false">Continuous</button>' +
+    '<button data-a="stop" aria-label="Stop narration">&#10005;</button>';
+  document.body.appendChild(bar);
+  var barTitle = bar.querySelector(".t b");
+  var barToggle = bar.querySelector('[data-a="toggle"]');
+  var barCont = bar.querySelector('[data-a="cont"]');
+
+  /* ---- transport ---- */
+  var pendingSeek = null;   // a seek asked for before the file had metadata
+
+  function seekTo(t){
+    if(el.readyState > 0){ el.currentTime = t; pendingSeek = null; }
+    else pendingSeek = t;   // applied on loadedmetadata
+  }
+  function load(id){
+    if(active === id) return false;
+    active = id;
+    pendingSeek = null;
+    el.src = AUDIO.dir + AUDIO.tracks[id].f;
+    el.playbackRate = rate;
+    barTitle.textContent = chapterTitle(id);
+    return true;
+  }
+  function play(id, at){
+    load(id);
+    if(typeof at === "number") seekTo(at);
+    var p = el.play();
+    if(p && p.catch) p.catch(function(){ paint(); });
+  }
+  function step(delta, scroll){
+    var i = order.indexOf(active) + delta;
+    if(i < 0 || i >= order.length) return false;
+    var id = order[i];
+    play(id, 0);
+    if(scroll){
+      var sec = document.getElementById(id);
+      if(sec) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    return true;
+  }
+
+  /* ---- painting ----
+     Runs on every timeupdate, so it writes to the DOM only where something
+     actually changed. */
+  function set(node, prop, value){
+    if(node[prop] !== value) node[prop] = value;
+  }
+  function paintStrip(id, playing){
+    var s = strips[id];
+    if(!s) return;
+    var isActive = (id === active);
+    var on = isActive && playing;
+    var dur = (isActive && isFinite(el.duration) && el.duration) || AUDIO.tracks[id].d;
+    var at = isActive ? el.currentTime : 0;
+
+    s.classList.toggle("on", on);
+    var btn = s.querySelector(".aud-play");
+    set(btn, "innerHTML", on ? "&#10073;&#10073;" : "&#9654;");
+    btn.setAttribute("aria-label",
+      (on ? "Pause narration for " : "Play narration for ") + chapterTitle(id));
+    set(s.querySelector(".aud-lbl"), "textContent", on ? "Playing" : "Listen");
+    set(s.querySelector(".aud-seek"), "value",
+        String(Math.round((at / dur) * 1000) || 0));
+    set(s.querySelector(".aud-time"), "innerHTML",
+        "<b>" + clock(at) + "</b> / " + clock(dur));
+    set(s.querySelector(".aud-rate"), "innerHTML", rateLabel());
+  }
+  function paint(){
+    var playing = !el.paused && !el.ended;
+    order.forEach(function(id){ paintStrip(id, playing); });
+    set(barToggle, "innerHTML", playing ? "&#10073;&#10073;" : "&#9654;");
+    barToggle.setAttribute("aria-label", playing ? "Pause" : "Play");
+    bar.classList.toggle("up", !!active && (playing || el.currentTime > 0));
+  }
+
+  el.addEventListener("timeupdate", paint);
+  el.addEventListener("play", paint);
+  el.addEventListener("pause", paint);
+  el.addEventListener("loadedmetadata", function(){
+    if(pendingSeek !== null){ el.currentTime = pendingSeek; pendingSeek = null; }
+    paint();
+  });
+  el.addEventListener("ended", function(){
+    if(continuous && step(1, true)) return;
+    paint();
+  });
+  el.addEventListener("error", function(){
+    bar.classList.remove("up");
+  });
+
+  /* ---- strip interaction ---- */
+  document.addEventListener("click", function(e){
+    var strip = e.target.closest ? e.target.closest(".aud") : null;
+    if(!strip) return;
+    var id = strip.getAttribute("data-ch");
+
+    if(e.target.closest(".aud-play")){
+      if(id === active && !el.paused) el.pause();
+      else play(id);
+    } else if(e.target.closest(".aud-rate")){
+      rate = RATES[(RATES.indexOf(rate) + 1) % RATES.length];
+      el.playbackRate = rate;
+      store.set("mcp-narration-rate", String(rate));
+      paint();
+    }
+  });
+  document.addEventListener("input", function(e){
+    if(!e.target.classList || !e.target.classList.contains("aud-seek")) return;
+    var strip = e.target.closest(".aud");
+    var id = strip.getAttribute("data-ch");
+    var frac = e.target.value / 1000;
+    if(id !== active) play(id, frac * AUDIO.tracks[id].d);
+    else seekTo(frac * (isFinite(el.duration) ? el.duration : AUDIO.tracks[id].d));
+  });
+
+  /* ---- bar interaction ---- */
+  bar.addEventListener("click", function(e){
+    var b = e.target.closest("button");
+    if(!b) return;
+    var a = b.getAttribute("data-a");
+    if(a === "toggle"){
+      if(el.paused) play(active || order[0]); else el.pause();
+    }
+    else if(a === "next"){ step(1, true); }
+    else if(a === "prev"){
+      if(el.currentTime > 3) seekTo(0); else step(-1, true);
+    }
+    else if(a === "cont"){
+      continuous = !continuous;
+      barCont.setAttribute("aria-pressed", String(continuous));
+    }
+    else if(a === "stop"){
+      el.pause(); el.currentTime = 0; active = null;
+      bar.classList.remove("up"); paint();
+    }
+  });
+
+  /* ---- masthead ---- */
+  var total = order.reduce(function(n, id){ return n + AUDIO.tracks[id].d; }, 0);
+  var intro = $("#aud-intro"), partno = $("#aud-partno");
+  $("#aud-total").textContent = "~" + Math.round(total / 60) + " min";
+  $("#aud-credit").textContent =
+    (AUDIO.credit || "") + " · " + order.length + " chapters";
+  $("#aud-start").addEventListener("click", function(){
+    continuous = true;
+    barCont.setAttribute("aria-pressed", "true");
+    play(order[0]);
+    var sec = document.getElementById(order[0]);
+    if(sec) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  /* Only reveal any of it once a real file has answered — so a copy of this
+     page without an audio/ folder shows nothing rather than dead buttons.
+
+     The retry matters: Chrome stalls media loading in a background tab, so a
+     page opened with a middle-click never gets its metadata and would sit
+     there with the player permanently hidden. Re-arm whenever the tab
+     becomes visible, until we get a definite answer either way. */
+  var settled = false;
+  var probe = new Audio();
+  probe.preload = "metadata";
+
+  probe.addEventListener("loadedmetadata", function(){
+    if(settled) return;
+    settled = true;
+    Object.keys(strips).forEach(function(id){ strips[id].style.display = ""; });
+    intro.classList.add("ready");
+    partno.hidden = false;
+    paint();
+  });
+  probe.addEventListener("error", function(){
+    if(settled) return;
+    settled = true;
+    Object.keys(strips).forEach(function(id){ strips[id].remove(); });
+    bar.remove();
+  });
+
+  function probeNow(){
+    if(settled || document.hidden) return;
+    probe.src = AUDIO.dir + AUDIO.tracks[order[0]].f;
+    probe.load();
+  }
+  document.addEventListener("visibilitychange", probeNow);
+
+  Object.keys(strips).forEach(function(id){ strips[id].style.display = "none"; });
+  probeNow();
+})();
 
 /* ---------- rail highlighting ---------- */
 var links = $$(".rail a");

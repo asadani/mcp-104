@@ -1,0 +1,13 @@
+Chapter one. The cost stack.
+
+An MCP server is not free to run, and it is not where most of the money goes. Both statements are true, and the difference between them is the interesting part.
+
+When someone asks what it costs to run our MCP server, they usually picture one line: the compute for the wrapper. There are at least eight, and they scale differently. Edge and wrapper compute, the process that verifies the token and translates the call. Product API work, the query or business logic behind the tool, which is usually the largest server side line. Storage and search, and outbound traffic. Observability, which grows with call volume. Abuse control, the limits and budgets from one oh three. Support, humans explaining why a call was refused. And a model, if the tool itself calls one.
+
+Then there is a second ledger that is not yours. The client's model reads your tool descriptions, sends arguments, reads results, and bills its own operator for the tokens. The cost function keeps the two apart. It computes the vendor's cost per call, multiplies by volume, prices the tokens the caller's model used, and returns each, the sum, and the two shares. All money is in micros, millionths of a currency unit.
+
+Use the panel. With the lab's placeholder numbers, ten thousand calls cost the vendor two hundred thousand micros, and the client's model nine million. So the vendor side is about two percent of the total. If micros are millionths of a dollar, that is twenty cents against nine dollars. The general shape is the point, not the figures. For a cheap read, the wrapper and the query are small next to the tokens spent deciding to make the call and reading the answer.
+
+Now try the presets. A model inside the tool changes the picture at once, because now the vendor pays for inference on every call. And retries triple the calls, multiplying every vendor line by three. An agent can produce that multiplier without a human ever noticing. It retries, fans out, and re reads. The limits and budgets of one oh three are what stop that becoming your bill.
+
+One warning about units. Never set a vendor micro cost beside a client token price without a common unit and a workload volume. Twenty micros per call and half a unit per million tokens are not comparable until you multiply each by how many calls and tokens a real workflow uses. Change one variable at a time.

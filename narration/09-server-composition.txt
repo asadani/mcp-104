@@ -1,0 +1,13 @@
+Chapter nine. Server composition.
+
+An MCP server that calls another MCP server adds a hop. Each hop must be paid for, in latency and in ways to fail.
+
+Part of this is in the repo. The hop checker from one oh three now has a caller, the composite draft release note tool. There is still no gateway or second server to compose with, so the cross server case is design.
+
+Composition is the pattern where a gateway, or a higher level server, calls other MCP servers to fulfil one request. It is right for two cases: a gateway, whose whole job is to sit in the middle, and a stable high level transaction, a workflow that always runs the same way, exposed as one tool. Each hop must carry the caller's subject and scopes, a trace id, the shared deadline, the remaining budget, and the route so far, and it must cap depth and refuse cycles. That is what the hop checker does, and chapter eight of one oh three has a simulator for it.
+
+What a check like that cannot do is make a hop free. Every hop multiplies two things you cannot budget away. Use the panel. Availability multiplies down. And the latency figure is the sum of the individual slowest cases. At three nines per server, a chain of four, the caller's server plus three hops, is available roughly ninety nine point six percent of the time. That is several hours of downtime a month, where each part alone would have had under an hour. And its latency budget is four times one server's. Neither figure appears on any hop's dashboard.
+
+So prefer a direct call inside a product owned server. If your server owns the tasks and the knowledge base, call the product functions. Another MCP hop adds no independent boundary, only latency and a token exchange. Use audience specific tokens for each hop, and keep approval at the trusted host for anything consequential. Protocol uniformity is not a reason: that both ends speak MCP does not justify the extra hop. And make the route visible in what you return, so a caller can see which servers touched their request.
+
+Where does composition earn its place? When the hop crosses a real boundary: a different organisation, a different trust domain, a product you do not own. Then the extra token exchange and the extra network call are the point, not a cost. Inside one product's walls, they are only overhead.

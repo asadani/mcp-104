@@ -1,0 +1,17 @@
+Chapter seven. Auth brokerage.
+
+A model gateway can hold one key for many endpoints. A tool gateway cannot, because every tool is somebody's data and every call is somebody's permission.
+
+This is a design chapter. No brokerage is implemented here. The identity model to reason against is chapter seven of one oh two: audience scoped tokens minted per call, and never forwarded.
+
+When a gateway sits between hosts and MCP servers, it becomes a broker. It holds or obtains credentials on the user's behalf. Model gateways do this happily, because many providers offer interchangeable text endpoints, and one account key covers them all. Tool gateways must not copy that shape. Each tool guards a particular person's access to a particular product, and the gateway's own credentials are the wrong answer to the question, who is asking?
+
+The panel shows three ways a gateway can call downstream. The first is wrong for user data. The gateway calls every server with its own service credential. It is simple, and now every downstream server sees the gateway as the caller. A user with no access to a page asks the gateway for it, the gateway has access, so it gets it. That is the confused deputy: an over privileged intermediary lends its authority to whoever asks. Downstream audit shows one actor for every user.
+
+The second is the pattern to aim for. The gateway verifies the user's token, then obtains a token for each downstream server that carries the original subject and is bound to that server's audience. It is the same step one oh two takes between the MCP server and the product APIs, applied one level up. The product's own checks then answer for the real person.
+
+The third is necessary, and risky. Users often authorise a downstream product once, and the gateway keeps the refresh token so later calls need no fresh consent. That is a store of long lived credentials. Encrypt it, separate tenants, bind each access token to its audience, request only the scopes a call needs, and log every consent change. Compromise of this vault is compromise of everyone's access at once.
+
+Some rules hold in every design. Carry the original subject in every downstream call. Bind tokens to an audience. Minimise scopes per call, not per session. Keep approvals in the host, because a gateway that can approve on the user's behalf has removed the consent it was meant to protect. And log consent changes, not just calls.
+
+Here is one test. Take any call through your gateway and ask: if the gateway's own credentials were stolen tomorrow, what could an attacker read that the affected user could not? If the answer is anything, the gateway is acting as itself.

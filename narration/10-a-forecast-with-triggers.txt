@@ -1,0 +1,15 @@
+Chapter ten. A forecast, with triggers.
+
+Some of this is buildable today. Some is likely. Some is a hope. Say which, and say what would change your mind.
+
+This is a design chapter, and a set of judgements, not results. The two things the repository can support are a router and a cost model. Everything else here is framed as a hypothesis, with something to measure.
+
+The panel has three tabs. What is buildable now works in production somewhere, and needs no new protocol feature. Stateless requests, so any replica serves and serverless hosting is straightforward. Durable task patterns, a jobs table with leases, and the protocol's own task methods for polling long work. Plan entitlements applied after identity is known. Gateways and tool catalogue search as ordinary engineering. And model backed tools where synthesis is the product.
+
+What is probable, as agent traffic grows. Enterprise gateways as the normal way to expose and govern servers. Verified catalogues with signed publisher identity. Per tool metering, so cost attaches to a capability, not a whole server. Priority classes for different customers on the same surface. Policy aware retrieval that filters by entitlement before ranking. And route telemetry strong enough to answer, why did this go there? What would change the author's mind: if hosts standardise on connecting to a handful of servers directly, gateways matter less.
+
+And what is a hope, not a plan. Broad automatic substitution across competing products. It works for models. For tools, different semantics, delegated auth, and side effects make it much harder. And many near identical fast and slow servers chosen by a model, where discovery and selection get worse, not better. What would change the author's mind: a widely used way to declare and verify semantic equivalence between independent tools. Nothing here provides it.
+
+Then turn each into a measurement, because a forecast you cannot check is an opinion. Do we need a gateway? Measure how many servers a host must be configured with. Is a slow lane worth it? Compare volume times saving with the lane's fixed cost. Is retrieval helping? Measure the wrong or missing tool rate, before and after. Are we spending on the right thing? Measure cost per successful workflow, split vendor and client. Is a hop justified? Measure the availability and latency of the whole chain. Is it working for people? Count support incidents caused by routing or refusals.
+
+Here is the through line of the whole series. One oh one drew a boundary. One oh two built across it. One oh three kept the building standing under load. One oh four argues about what to put in front of it. And one rule held every time: a layer is allowed to help, and never to decide what only the layer beneath it can know. Retrieval helps, and does not authorise. A gateway routes, and does not impersonate. A router picks, and refuses to guess.

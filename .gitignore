@@ -6,3 +6,6 @@ playwright-report/
 .env
 *.tsbuildinfo
 cdk.out/
+*/.chunks/
+voice/*.wav
+voice/*.m4a

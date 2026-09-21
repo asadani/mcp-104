@@ -1,0 +1,15 @@
+Chapter eight. A model inside a tool.
+
+Some tools should call a model. Most tools that do are hiding a second agent nobody asked for.
+
+This is a design chapter. No tool in this repository calls a model. What the repo has is the cost model, which the panel reuses to show what a server owned model does to the vendor's bill.
+
+An MCP server can call a language model of its own inside a tool, to summarise a long document, extract fields, or answer questions about a dataset. That is legitimate when synthesis is the product. A summarise this contract tool that calls a model is doing what it says, and the model is an implementation detail.
+
+It is a mistake when the model is there to orchestrate. A tool that takes a goal and decides for itself which other tools to call is a second agent, in the server, invisible to the host. It compounds non determinism, because two models are deciding. It compounds latency, because it is a loop with no bound. It compounds prompt injection exposure, because untrusted content now flows into a model the caller never saw. And it makes failures and spend nearly impossible for the host to explain.
+
+Use the panel. With no model in the tool, the vendor share of the total cost is a couple of percent. Add even a small model, and the vendor pays for inference on every call, and the vendor share climbs from a rounding error to a large part of the total. That is the practical reason to be deliberate. A server owned model turns a cheap read into a metered product, and you need to price it like one. The figures in the two summary presets are illustrative placeholders, not prices of any real model.
+
+The table on the page says what a tool with a model inside should do. If its job is synthesis, say so in the description, and return the model name, usage, and cost where the caller needs them. If it produces claims about data, return citations to the source rows, and the freshness of what it read. If it can run long or expensive, enforce a deadline and a token budget, and let the caller lower them. If it reads untrusted text, treat that text as data, never as instructions, and label the output as model generated. And if it would decide what to call next, it should not exist. Return to the host, and let it orchestrate, in view.
+
+Then the visibility test. After a call finishes, can the host tell how many model calls happened inside it, what they cost, what data they saw, and why it stopped? If not, the model is hidden orchestration, and you will not be able to explain a bad answer or a surprising bill.

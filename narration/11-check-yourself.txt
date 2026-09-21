@@ -1,0 +1,7 @@
+Chapter eleven. Check yourself.
+
+Eight questions. The explanations do the teaching.
+
+The questions come back to a few ideas. Costs come in two ledgers, and the vendor side is often the small one. One server with different treatment beats two servers that differ only in speed. A slow lane pays only when volume times the saving beats the cost of running two paths. A gateway is a second lock, never a replacement for the first. Retrieval narrows what a model sees, and never decides what is allowed. A router must refuse rather than silently substitute. A gateway must act as the user, not as itself. A model inside a tool needs to be visible to the host. And every hop costs availability and latency, so a hop has to buy a real boundary.
+
+If an answer surprises you, go back to the chapter it names.

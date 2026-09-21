@@ -1,0 +1,13 @@
+Chapter six. Semantic routing.
+
+Two tools can share a name and a price list, and still disagree about what search means. Routing between them without checking is how data goes missing quietly.
+
+Routing between models is comparatively easy, because most text models share an interface: text in, text out. If two models disagree slightly, the result is a somewhat different sentence. Routing between tools is not easy, because a tool has semantics. Two tools both called search tasks may disagree on which tenants they search, whether archived items appear, how results are ranked, how fresh the index is, and whether the ids they return mean the same thing. Swap one for the other and nothing errors. The answers are simply wrong, and nobody knows.
+
+The lab includes a provider built to test exactly that. It is called the lookalike. It advertises the same capability. It is cheaper, two micros against twenty. And it is faster, sixty milliseconds against four hundred and fifty. On price and latency alone it would win every time. It does not, because its contract is a different one.
+
+Use the panel, and watch the lookalike in each preset. When the operation needs the Teamspace contract, the lookalike is rejected as a semantic contract mismatch, though it would have been the cheapest. When the operation needs the other contract, it is the only provider that qualifies, and the Teamspace providers are the ones rejected. And when the operation needs a contract nobody offers, no provider is chosen at all. The router's answer is a refusal, not the nearest match. The same refusal comes back over MCP from the explain route tool.
+
+Note what the router does not do. It does not decide that two contracts are equivalent. That is a human decision, made when a provider is registered, and recorded as an identical contract string. It is the same decision a database team makes when they say two indexes are interchangeable. If you want one contract to satisfy another, declare it, test it, and say why. Do not let a routing layer infer it from a matching name.
+
+The table on the page sums it up. Between models, a wrong choice looks like a somewhat different answer, and the safe default is to fall back to a similar model. Between tools, a wrong choice looks like a confident answer over the wrong data, or a write to the wrong place. What must match is semantics, permissions, side effects, freshness, residency, and trust. And the safe default is to refuse. Never silently substitute.

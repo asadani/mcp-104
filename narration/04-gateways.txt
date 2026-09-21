@@ -1,0 +1,15 @@
+Chapter four. Gateways.
+
+A gateway is a single place to enforce discovery, identity, policy, audit, and quotas for many servers. It is also a single place for everything to go wrong at once.
+
+This is a design chapter. There is no gateway in this repository. The only routing surface is a read only tool that explains a routing decision, which is real. The gateway trace is a labelled sketch.
+
+Once an organisation has ten MCP servers instead of one, the same problems appear ten times. Which servers may a host connect to? Whose credentials does each use? Who may call what? Where is the audit trail? A gateway answers those once. It owns discovery, a verified catalogue and not a list someone pasted into a config file. It owns client OAuth, and the delegated identity that goes downstream. It owns policy, audit, and quotas in one place. And it keeps route evidence, a record of which provider handled a request, and why.
+
+It must not mint a more privileged downstream identity than the user has, and it must not hide which provider handled a write. A gateway that quietly acts as itself, with its own broad credentials, has turned every user into whatever the gateway can do.
+
+Step through the sketch. The host calls the gateway as the user. The gateway checks who and what, before choosing where, and fails closed: if the policy source is unreachable, it denies. It routes on hard constraints, and that is the part the repository really implements. It calls the provider as the same user, with a fresh token for that provider's audience, carrying the original subject. The provider enforces its own rules, because the gateway is a second lock, not a replacement for the first. And the answer returns with the route recorded, so a bad write can be traced to a decision.
+
+The one real piece is the explain route tool. Two real calls are on the page, an accepted one, and a refusal. The refusal is the useful one. Four providers were considered and none qualified, three on the semantic contract and one on capability. The router refuses a silent downgrade. It does not pick the next best thing. That evidence is what makes a routing decision inspectable afterwards, which is what a gateway needs most. And the tool goes through the same guarded pipeline as every other, so it takes a permit and writes an audit row.
+
+A gateway concentrates risk. It is a high value target and a failure boundary at once. So design its regional availability before optimising its latency. Make it fail closed. Isolate one tenant's cached data from another's. Sign its catalogue. And make its decisions explainable before making them fast.

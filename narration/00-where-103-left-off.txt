@@ -1,0 +1,13 @@
+Chapter zero. Where one oh three left off.
+
+MCP one oh three made the server survive. MCP one oh four asks what it costs, who should serve which request, and where the gateways and model backed tools people are proposing actually fit.
+
+It starts from the finished system in one oh three. This repository adds one small file, about twenty five lines, plus one tool and one endpoint. That file holds a cost model, a router, and four providers for the router to choose between. Everything the rest of the course argues is tested against those, or is labelled as design where the repository has nothing to run.
+
+Read the first box on the page carefully. Most of this course is a set of design arguments, not code. One mechanism is implemented and tested: the router and the cost model. Four chapters describe things this repository does not contain: a gateway, a tool catalogue, credential brokerage, and a model inside a tool. Every chapter opens with a label saying which it is, and the frames in the design chapters are sketches. Where a number comes from the lab, it is a placeholder the author chose, not a measurement. Replace them with yours before drawing any conclusion.
+
+The four providers are data, not running services. Each states what it can do, how fast and how expensive it is, and which contract it obeys. Two are Teamspace itself, a standard one and a priority one that can write. One is a cheaper, cached, European batch provider. And one is a lookalike from another vendor, cheaper and faster, which will matter a great deal in chapter six.
+
+Now, what is inherited unchanged. Three of the controls from one oh three matter to the economics. The URL importer resolves a host once, checks the answer, and then connects to that address, so a hostile name cannot pass the check and be looked up again as a private one. The operations endpoint answers only to an organisation administrator. And a maintenance sweep keeps the tables from growing without limit.
+
+That sweep has a sharp edge. It deletes operation records seven days after they were created, so a retry with the same key after that is a new operation, and the write runs again. It matters here, because a cheaper, slower route tempts you to queue work for longer. Design any queueing delay, and any client retry policy, to finish well inside that window.

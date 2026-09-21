@@ -1,0 +1,15 @@
+Chapter three. Async economics.
+
+A slow lane is not just a slower fast lane. It is a different way of doing the work, and it only pays when waiting saves real money.
+
+Two ideas get run together here, and should be separated. Stateless means a request carries its own context, so any replica can serve it. It says nothing about speed or waiting. A normal stateless tool call can still finish in ninety milliseconds. A slow lane is a lifecycle: accept the work, persist it, lease it to a worker, retry on failure, expose its status, and expire the result. That is what chapter seven of one oh three begins.
+
+A slow lane earns its complexity only when waiting saves something material. The classic cases are GPU inference that batches many requests into one pass, large exports, and index rebuilds. It is a poor fit for a cheap database lookup. Delaying a query that costs a few micros will not recover the cost of building and running a second service tier.
+
+Look at the lab. It asks for a stale tolerant, European resident, asynchronous page search that can wait ten seconds. Only the batch provider qualifies. The two realtime providers are rejected on residency, and the lookalike on capability. It costs four micros against the standard provider's twenty, a saving of eighty percent per call. Now ask whether that is worth building.
+
+Use the break even panel. It is plain arithmetic, not a repo function. The fixed monthly cost of running the lane is an invented number, and the point is that it exists. Break even volume is that fixed cost divided by the saving per call, across the calls that can wait. With the defaults, two hundred thousand calls a month save well under the invented fixed cost, so the lane does not pay. It starts to pay at millions of calls, or at a much larger per call gap. Lower the share that can wait, and the verdict flips quickly.
+
+That is the general shape of the argument. Volume times per call saving must beat the cost of running two paths. If the per call gap is a few micros, you need very high volume.
+
+And remember what the slow lane changes for callers. Everything about the contract. The answer is not in the response, it is a handle. The description has to say so, the host has to poll or be told, and results expire. Never hide a slow lane behind an identical looking tool. Make the mode explicit, as the router does.

@@ -1,0 +1,15 @@
+Chapter five. Tool retrieval.
+
+A host with a thousand tools cannot show a model a thousand tools. Retrieval picks a few. It is a filter for attention, never a lock.
+
+This is a design chapter. There is no catalogue or retrieval in the repository. The demo on the page is a deliberately crude toy, matching words, run over the real eleven tool descriptions from this server, to make the idea concrete.
+
+Every tool description a host loads into a model's context costs tokens on every turn, and competes for the model's attention. With a handful of tools, that is fine. With a large catalogue, many servers and hundreds of tools, two things degrade: the context fills up, and selection gets worse, because there are too many plausible choices. The remedy is retrieval. Search a trusted catalogue by the task in hand, and expose only a small set of candidates.
+
+Try the panel. Type a task, and eleven tools narrow to three. The readout shows how much description text the model no longer has to read. Then switch to the viewer, and call create task, even though the host hid it. It is refused.
+
+That is the lesson. Narrowing is not authorising. Retrieval decides what the model sees. Authorisation decides what may happen. A hidden tool can still be named by a model or a caller, and the server must refuse it exactly as it would have if it were visible. One oh two and one oh three both build that in.
+
+Some rules follow. The catalogue is a trust boundary. An entry needs a publisher identity, a version, the scopes it needs, whether it has side effects, its data residency, a deprecation status, and its provenance. Metadata a stranger's server supplies about itself is input to be verified, not routing policy. Descriptions are attack surface, because retrieval reads them to rank them, and a description written to rank highly for everything is an attack. So rank on trusted metadata first, and description text second. And filter by entitlement before ranking. Offering a tool the person can never use wastes a slot and invites a failed call.
+
+The cost of getting it wrong is two ways. If retrieval hides the right tool, the model improvises with the wrong one. If it shows a dangerous tool to someone who should not have it, and the server trusts the host to have filtered, you have moved the security boundary into a ranking function. Keep the server's checks as if retrieval did not exist.
