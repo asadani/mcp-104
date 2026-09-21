@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { openDb, migrate, seed } from '../src/db.js';
+import { openDb, migrate, seed, cleanupOperationalData } from '../src/db.js';
 import { actor, approve, once } from '../src/policy.js';
 import { Product } from '../src/product.js';
 
@@ -58,5 +58,25 @@ test('a completed operation is replayed and its work is not run twice', async ()
   const second = await once(db, a, 'replay-key-1', { x: 1 }, work);
   assert.deepEqual(second, first);
   assert.equal(runs, 1);
+  await db.close();
+});
+
+test('an operation key stops replaying once the seven-day sweep has removed it', async () => {
+  const { db } = await setup();
+  const a = await actor(db, 'alice');
+  let runs = 0;
+  const work = async () => ({ n: ++runs });
+  await once(db, a, 'aged-key-old', { x: 1 }, work);
+  await once(db, a, 'aged-key-recent', { x: 1 }, work);
+  assert.equal(runs, 2);
+  await db.query("UPDATE operations SET created_at = now() - interval '8 days' WHERE key LIKE '%:aged-key-old'");
+  await db.query("UPDATE operations SET created_at = now() - interval '6 days' WHERE key LIKE '%:aged-key-recent'");
+  await cleanupOperationalData(db);
+  // Six days old: the record survives, so the retry is replayed and the work does not run again.
+  await once(db, a, 'aged-key-recent', { x: 1 }, work);
+  assert.equal(runs, 2);
+  // Eight days old: the record is gone, so the same key is a brand-new operation and the work runs again.
+  await once(db, a, 'aged-key-old', { x: 1 }, work);
+  assert.equal(runs, 3);
   await db.close();
 });

@@ -243,7 +243,7 @@ details.acc[open] summary::before{content:"– "}
 details.acc p{margin:10px 0 0;max-width:64ch;color:var(--ink-2)}
 
 @media (max-width:860px){
-  .split{grid-template-columns:1fr;gap:0}
+  .split{grid-template-columns:minmax(0,1fr);gap:0}
   .rail{position:static;margin-bottom:34px;border:1px solid var(--rule);background:var(--paper-2);padding:14px}
   .rail-inner{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px}
   .rail .grp{grid-column:1/-1;margin:10px 0 2px}
@@ -359,8 +359,9 @@ pre:focus-visible{outline:2px solid var(--host);outline-offset:1px}
 
 /* ---------- simulators ---------- */
 .fields{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:flex-end;margin-bottom:16px}
-.field{display:flex;flex-direction:column;gap:4px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink-2)}
+.field{max-width:100%;min-width:0;display:flex;flex-direction:column;gap:4px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink-2)}
 .field input[type=text],.field input[type=number],.field select{font-family:var(--mono);font-size:13px;padding:6px 8px;border:1px solid var(--ink-3);background:var(--paper-2);color:var(--ink);border-radius:2px;min-width:140px}
+.field select{max-width:100%}
 .field input[type=range]{accent-color:var(--host);width:190px}
 .field output{color:var(--ink);font-weight:600}
 .readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);margin:14px 0}
@@ -489,6 +490,10 @@ figure{margin:0}
   <div class="callout"><span class="tag">Read this first</span><p>Most of MCP 104 is a set of design arguments, not code. One mechanism is implemented and tested (the router and cost model). Four chapters describe things this repository does not contain: a gateway, a tool catalogue, credential brokerage and a model inside a tool. Every chapter opens with a box saying which it is, and the frames in the design chapters are sketches, marked as such. Where a number comes from the repo’s lab it is <em>a placeholder chosen by the author</em>, not a measurement. Replace them with yours before drawing any conclusion.</p></div>
   <div class="tbl-wrap"><table><thead><tr><th scope="col">Chapter</th><th scope="col">Topic</th><th scope="col">What the repo has</th></tr></thead><tbody><tr><th scope="row" class="lbl">01</th><td>The cost stack</td><td><span class="chip ok">implemented</span> <code>estimateCost()</code></td></tr><tr><th scope="row" class="lbl">02</th><td>Tiering</td><td><span class="chip ok">implemented</span> providers and <code>route()</code></td></tr><tr><th scope="row" class="lbl">03</th><td>Async economics</td><td><span class="chip warn">partly</span> the batch provider here; the job table and worker are in 103</td></tr><tr><th scope="row" class="lbl">04</th><td>Gateways</td><td><span class="chip info">design</span> only <code>explain_route</code> exists</td></tr><tr><th scope="row" class="lbl">05</th><td>Tool retrieval</td><td><span class="chip info">design</span> a toy demo on the real tool list</td></tr><tr><th scope="row" class="lbl">06</th><td>Semantic routing</td><td><span class="chip ok">implemented</span> the semantic check in <code>route()</code></td></tr><tr><th scope="row" class="lbl">07</th><td>Auth brokerage</td><td><span class="chip info">design</span></td></tr><tr><th scope="row" class="lbl">08</th><td>Model inside a tool</td><td><span class="chip info">design</span> cost effect only</td></tr><tr><th scope="row" class="lbl">09</th><td>Server composition</td><td><span class="chip warn">partly</span> <code>nextHop()</code>, used by one tool in 103</td></tr><tr><th scope="row" class="lbl">10</th><td>Forecast</td><td><span class="chip info">hypotheses</span></td></tr></tbody></table></div>
 
+  <h3>What is inherited unchanged</h3>
+  <p>The controls MCP 103 added come along untouched, and three of them matter to the economics that follow. The URL importer resolves a host once, checks the answer, and then connects to <em>that address</em>, so a hostile name cannot pass the check and be re-resolved to a private one. The <code>/api/ops</code> endpoint that reports usage and audit data answers only to an organisation administrator; anyone else gets <code>FORBIDDEN</code>. And a maintenance sweep, <code>cleanupOperationalData()</code> in <code>src/db.ts</code>, keeps the tables from growing without limit.</p>
+  <div class="callout"><span class="tag">An operation key does not last forever</span><p>The sweep deletes operation records <strong>seven days</strong> after they were created, audit rows after thirty days, and rate-limit rows after one day. A retry with the same operation key inside the seven days is replayed. A retry after them is a new operation and the write runs again. The test <code>an operation key stops replaying once the seven-day sweep has removed it</code> checks both sides of that line. It matters here because a cheaper, slower route tempts you to queue work for longer: the longer a write can wait, the more the retry window has to be designed rather than assumed. MCP 103 Chapter 04 has the full story.</p></div>
+
   <h3>The four providers</h3>
   <p>The router has something to choose between because <code>economics.ts</code> declares four execution providers. They are data, not running services. Each states what it can do, how fast and how expensive it is, and what contract it obeys:</p>
   <div class="cap"><b>src/economics.ts</b><span>providers: the router’s whole world</span></div><pre class="code server" tabindex="0"><code><span class="t-k">export</span> <span class="t-k">const</span> providers: Provider[] = [
@@ -567,7 +572,9 @@ figure{margin:0}
 ✔ write routing requires an explicitly write-capable provider
 ✔ slow task lane is selected only when requested and allowed
 ✔ cost model separates vendor infrastructure from client model cost
+✔ operations data is admin-only and expired operational rows are removed
 ✔ the address check refuses internal space, including IPv4-mapped IPv6 and shared space
+✔ URL import pins the validated address for the TLS connection
 ✔ a viewer cannot queue a job, and a member on the free plan gets PLAN_REQUIRED
 ✔ job tools use the same pipeline: a structured error and an audit row
 ✔ a successful job call is audited too
@@ -579,6 +586,7 @@ figure{margin:0}
 ✔ publishing without an approval does not burn the operation key
 ✔ a failed transaction rolls back both the write and its claim
 ✔ a completed operation is replayed and its work is not run twice
+✔ an operation key stops replaying once the seven-day sweep has removed it
 ✔ MCP discovery, tool call and resource read work end to end
 ✔ a reservation that is never settled expires and frees its hold
 ✔ a reservation is a ceiling: settlement never charges more than was reserved
@@ -596,8 +604,8 @@ figure{margin:0}
 ✔ URL validation blocks private networks
 ✔ composite hop prevents cycles, excess depth and budget overrun
 ✔ a refused resource read is a structured not-found, the same as a page that does not exist
-ℹ tests 41
-ℹ pass 41
+ℹ tests 44
+ℹ pass 44
 ℹ fail 0</code></pre></div>
   <p><code>src/production.ts</code> is byte-for-byte the file from MCP 103, so everything that course built and fixed applies here unchanged: the shared token bucket, expiring budget holds, the job worker, the wired-in circuit breaker and the numeric address check. This course does not repeat it.</p>
 
