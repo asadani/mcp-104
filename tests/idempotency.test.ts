@@ -36,11 +36,16 @@ test('publishing without an approval does not burn the operation key', async () 
   await db.close();
 });
 
-test('an unclassified failure keeps the claim, because the outcome really is unknown', async () => {
+test('a failed transaction rolls back both the write and its claim', async () => {
   const { db } = await setup();
   const a = await actor(db, 'alice');
-  await assert.rejects(() => once(db, a, 'unknown-key-1', { x: 1 }, async () => { throw new Error('connection dropped'); }), /connection dropped/);
-  await assert.rejects(() => once(db, a, 'unknown-key-1', { x: 1 }, async () => 'ok'), (e: any) => e.code === 'OUTCOME_UNKNOWN');
+  await assert.rejects(() => once(db, a, 'atomic-key-1', { x: 1 }, async tx => {
+    await tx.query("INSERT INTO tasks(id,org,team,title,status) VALUES('rolled-back','acme','platform','Must vanish','todo')");
+    throw new Error('connection dropped');
+  }), /connection dropped/);
+  assert.equal((await db.query("SELECT id FROM tasks WHERE id='rolled-back'")).rows.length, 0);
+  assert.equal((await db.query("SELECT key FROM operations WHERE key LIKE '%:atomic-key-1'")).rows.length, 0);
+  assert.equal(await once(db, a, 'atomic-key-1', { x: 1 }, async () => 'safe retry'), 'safe retry');
   await db.close();
 });
 

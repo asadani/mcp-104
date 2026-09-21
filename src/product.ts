@@ -26,15 +26,15 @@ export class Product {
   async createTask(a: Actor, raw: unknown) {
     writeAllowed(a); const p = createTaskSchema.parse(raw);
     if(p.assignee && !(await this.db.query('SELECT id FROM members WHERE id=$1 AND org=$2 AND team=$3 AND active=true',[p.assignee,a.org,a.team])).rows.length) throw new Fault('INVALID_ASSIGNEE','Choose an active member of this team.');
-    return once(this.db,a,p.operationKey,{op:'create_task',...p},async()=>{
+    return once(this.db,a,p.operationKey,{op:'create_task',...p},async tx=>{
       const taskId=id();
-      return (await this.db.query(`INSERT INTO tasks(id,org,team,title,status,assignee) VALUES($1,$2,$3,$4,'todo',$5) RETURNING *`,[taskId,a.org,a.team,p.title,p.assignee??a.id])).rows[0];
+      return (await tx.query(`INSERT INTO tasks(id,org,team,title,status,assignee) VALUES($1,$2,$3,$4,'todo',$5) RETURNING *`,[taskId,a.org,a.team,p.title,p.assignee??a.id])).rows[0];
     });
   }
   async updateTask(a: Actor, raw: unknown) {
     writeAllowed(a); const p = updateTaskSchema.parse(raw); await this.getTask(a,p.id);
-    return once(this.db,a,p.operationKey,{op:'update_task',...p},async()=>{
-      const r = await this.db.query('UPDATE tasks SET status=$1,version=version+1 WHERE id=$2 AND org=$3 AND team=$4 AND version=$5 RETURNING *',[p.status,p.id,a.org,a.team,p.version]);
+    return once(this.db,a,p.operationKey,{op:'update_task',...p},async tx=>{
+      const r = await tx.query('UPDATE tasks SET status=$1,version=version+1 WHERE id=$2 AND org=$3 AND team=$4 AND version=$5 RETURNING *',[p.status,p.id,a.org,a.team,p.version]);
       if (!r.rows.length) throw new Fault('CONFLICT','The task changed. Reload it before saving.',409);
       return r.rows[0];
     });
@@ -56,10 +56,10 @@ export class Product {
     writeAllowed(a); const p=pageSchema.parse(raw);
     for(const taskId of p.taskIds) await this.getTask(a,taskId);
     const {approvalId,...operation}=p;
-    return once(this.db,a,p.operationKey,{op:'publish_page',...operation},async()=>{
-      await useApproval(this.db,a,approvalId??'',{op:'publish_page',...operation});
+    return once(this.db,a,p.operationKey,{op:'publish_page',...operation},async tx=>{
+      await useApproval(tx,a,approvalId??'',{op:'publish_page',...operation});
       const pageId=id();
-      return (await this.db.query('INSERT INTO pages(id,org,team,title,body,task_ids) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[pageId,a.org,a.team,p.title,p.body,JSON.stringify(p.taskIds)])).rows[0];
+      return (await tx.query('INSERT INTO pages(id,org,team,title,body,task_ids) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[pageId,a.org,a.team,p.title,p.body,JSON.stringify(p.taskIds)])).rows[0];
     });
   }
   async revisePage(a: Actor, pageId: string, body: string, version: number) {

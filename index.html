@@ -553,8 +553,8 @@ figure{margin:0}
   <p>Cost is in <em>micros</em>: millionths of a currency unit per call. Notice that the fourth provider is the cheapest and the fastest. It is there to be a trap, and Chapter 06 shows why the router refuses it.</p>
 
   <h3>The new surface, and the old findings</h3>
-  <p>The MCP surface gains one tool, <code>explain_route</code>. The HTTP API gains <code>/api/economics</code>, which returns the lab’s default experiment for an authenticated caller. The tests grow from thirty-five in MCP 103 to forty-one: five on the router and cost model, and one that drives <code>explain_route</code> through the MCP server.</p>
-  <div class="run"><div class="run-hd"><span>Captured run</span><span>captured 2026-09-20 · forty-one tests, all passing</span></div><pre tabindex="0"><code><span class="t-k">$ </span>npm test
+  <p>The MCP surface gains one tool, <code>explain_route</code>. The HTTP API gains <code>/api/economics</code>, which returns the lab’s default experiment for an authenticated caller. The executable suite adds router, cost-model, and end-to-end checks for <code>explain_route</code>. Run it for the current count.</p>
+  <div class="run"><div class="run-hd"><span>Representative run</span><span>run npm test for the current count</span></div><pre tabindex="0"><code><span class="t-k">$ </span>npm test
 ✔ an unreachable product API opens the circuit, and calls stop reaching it
 ✔ a definite refusal from a healthy dependency is not an outage
 ✔ tenant and team scope known identifiers
@@ -577,7 +577,7 @@ figure{margin:0}
 ✔ the /mcp edge answers 401 with a WWW-Authenticate challenge, never a 500
 ✔ a refused write releases its key, so the same key can be used again
 ✔ publishing without an approval does not burn the operation key
-✔ an unclassified failure keeps the claim, because the outcome really is unknown
+✔ a failed transaction rolls back both the write and its claim
 ✔ a completed operation is replayed and its work is not run twice
 ✔ MCP discovery, tool call and resource read work end to end
 ✔ a reservation that is never settled expires and frees its hold

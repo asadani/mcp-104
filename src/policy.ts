@@ -13,6 +13,9 @@ export async function actor(db: Sql, subject: string): Promise<Actor> {
 export function writeAllowed(a: Actor) {
   if (a.role === 'viewer') throw new Fault('FORBIDDEN','Your role can read but cannot change this team’s work.',403);
 }
+export function operatorAllowed(a:Actor){
+  if(a.role!=='admin') throw new Fault('FORBIDDEN','Only organization administrators can view operations data.',403);
+}
 export function entitlement(a: Actor, feature: string) {
   if (a.tier !== 'pro') throw new Fault('PLAN_REQUIRED',`${feature} requires the Pro plan. Data permissions still apply.`,403);
 }
@@ -34,27 +37,20 @@ export async function useApproval(db: Sql, a: Actor, approval: string, operation
   const r = await db.query(`UPDATE approvals SET used=true WHERE id=$1 AND actor=$2 AND fingerprint=$3 AND used=false AND expires_at>now() RETURNING id`,[approval,a.id,fingerprint(operation)]);
   if (!r.rows.length) throw new Fault('APPROVAL_REQUIRED','Review and approve this exact operation again.',403);
 }
-export async function once<T>(db: Sql, a: Actor, key: string, input: unknown, work: ()=>Promise<T>): Promise<T> {
+export async function once<T>(db: Sql, a: Actor, key: string, input: unknown, work: (tx:Sql)=>Promise<T>): Promise<T> {
+  return db.transaction(async tx=>{
   const scoped = `${a.org}:${a.id}:${key}`, hash = fingerprint(input);
-  const claim = await db.query('INSERT INTO operations(key,actor,fingerprint) VALUES($1,$2,$3) ON CONFLICT DO NOTHING RETURNING key',[scoped,a.id,hash]);
+  const claim = await tx.query('INSERT INTO operations(key,actor,fingerprint) VALUES($1,$2,$3) ON CONFLICT DO NOTHING RETURNING key',[scoped,a.id,hash]);
   if (!claim.rows.length) {
-    const prior = (await db.query('SELECT * FROM operations WHERE key=$1',[scoped])).rows[0];
+    const prior = (await tx.query('SELECT * FROM operations WHERE key=$1 FOR UPDATE',[scoped])).rows[0];
     if (prior.fingerprint !== hash) throw new Fault('IDEMPOTENCY_CONFLICT','This operation key was already used with different arguments.',409);
-    if (prior.result === null) throw new Fault('OUTCOME_UNKNOWN','Operation in progress or interrupted. Inspect its outcome before retrying.',409);
+    if (prior.result === null) throw new Fault('OPERATION_IN_PROGRESS','The original operation is still in progress. Retry after it finishes.',409,true);
     return prior.result as T;
   }
-  // Product writes use their own stable IDs. A crash between write and recording outcome
-  // is surfaced as OUTCOME_UNKNOWN, never blindly replayed. See the recovery lab.
-  // A Fault is a definite, classified refusal (a stale version, a missing approval): nothing was
-  // written, so the claim is released and the caller may retry. Anything else, such as a dropped
-  // connection, leaves the claim in place because the outcome really is unknown.
-  let result: T;
-  try {
-    result = await work();
-  } catch (e) {
-    if (e instanceof Fault) await db.query('DELETE FROM operations WHERE key=$1 AND result IS NULL',[scoped]);
-    throw e;
-  }
-  await db.query('UPDATE operations SET result=$2 WHERE key=$1',[scoped,JSON.stringify(result)]);
+  // The claim, product write and recorded result commit together. A crash before commit rolls
+  // all three back; a lost response after commit replays the recorded result.
+  const result = await work(tx);
+  await tx.query('UPDATE operations SET result=$2 WHERE key=$1',[scoped,JSON.stringify(result)]);
   return result;
+  });
 }

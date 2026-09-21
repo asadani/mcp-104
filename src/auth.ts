@@ -10,14 +10,15 @@ export class Identity {
     if(secret && secret.length<32) throw new Error('TOKEN_SECRET must have at least 32 characters.');
     this.key=secret ? new TextEncoder().encode(secret):randomBytes(32);
   }
-  async issue(subject:string,audience='teamspace',scopes='read write') {
+  mcpAudience(){return this.issuer+'/mcp';}
+  async issue(subject:string,audience=this.mcpAudience(),scopes='read write') {
     return new SignJWT({scope:scopes}).setProtectedHeader({alg:'HS256'}).setSubject(subject).setIssuer(this.issuer).setAudience(audience).setIssuedAt().setExpirationTime('15m').sign(this.key);
   }
-  async verify(token:string,audience='teamspace') {
+  async verify(token:string,audience=this.mcpAudience()) {
     try { const {payload}=await jwtVerify(token,this.key,{issuer:this.issuer,audience,algorithms:['HS256']}); if(!payload.sub) throw new Error(); return payload.sub; }
     catch { throw new Fault('UNAUTHORIZED','A valid, unexpired token for this service is required.',401); }
   }
-  async subject(header?:string,audience='teamspace') {
+  async subject(header?:string,audience=this.mcpAudience()) {
     if(!header?.startsWith('Bearer ')) throw new Fault('UNAUTHORIZED','Sign in to Teamspace.',401);
     return this.verify(header.slice(7),audience);
   }
@@ -50,7 +51,7 @@ export class Identity {
 // The edge check for /mcp. It must run BEFORE the MCP handler. A Fault thrown from inside
 // createMcpHandler's factory is reported by the SDK as a 500 "Internal server error", so the
 // client would never receive the 401 challenge that tells it where to sign in.
-export function requireToken(identity: Identity, origin: string, audience = 'teamspace'): RequestHandler {
+export function requireToken(identity: Identity, origin: string, audience = origin+'/mcp'): RequestHandler {
   return async (req, res, next) => {
     try {
       await identity.subject(req.headers.authorization, audience);

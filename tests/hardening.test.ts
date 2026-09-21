@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/server';
-import { openDb, migrate, seed } from '../src/db.js';
+import { openDb, migrate, seed, cleanupOperationalData } from '../src/db.js';
 import { Identity } from '../src/auth.js';
 import { startApi, Downstream, portOf } from '../src/api.js';
 import { createServer } from '../src/mcp.js';
-import { actor } from '../src/policy.js';
+import { actor, operatorAllowed } from '../src/policy.js';
 import { FairLimiter, Jobs, ProductionControls, SafeImporter } from '../src/production.js';
 
 async function harness(subject: string, configure?: (p: ProductionControls) => void) {
@@ -25,6 +25,23 @@ async function harness(subject: string, configure?: (p: ProductionControls) => v
   await client.connect(ct);
   return { db, client, close: async () => { await client.close(); ta.close(); ka.close(); await db.close(); } };
 }
+
+test('operations data is admin-only and expired operational rows are removed',async()=>{
+  const db=await openDb('memory://');await migrate(db);await seed(db);
+  operatorAllowed(await actor(db,'alice'));
+  const member=await actor(db,'bob');
+  assert.throws(()=>operatorAllowed(member),(e:any)=>e.code==='FORBIDDEN');
+  await db.query("INSERT INTO audit(id,actor,org,operation,outcome,trace_id,created_at) VALUES('old-audit','alice','acme','x','success','t',now()-interval '31 days')");
+  await db.query("INSERT INTO rate_buckets(key,tokens,at) VALUES('old-rate',0,now()-interval '2 days')");
+  await db.query("UPDATE usage SET reserved=25 WHERE org='acme'");
+  await db.query("INSERT INTO reservations(id,org,amount,state,expires_at) VALUES('abandoned','acme',25,'reserved',now()-interval '2 days')");
+  await cleanupOperationalData(db);
+  assert.equal((await db.query("SELECT id FROM audit WHERE id='old-audit'")).rows.length,0);
+  assert.equal((await db.query("SELECT key FROM rate_buckets WHERE key='old-rate'")).rows.length,0);
+  assert.equal((await db.query("SELECT reserved FROM usage WHERE org='acme'")).rows[0].reserved,0);
+  assert.equal((await db.query("SELECT state FROM reservations WHERE id='abandoned'")).rows.length,0);
+  await db.close();
+});
 const body = (r: any) => JSON.parse(r.content[0].text);
 
 test('the address check refuses internal space, including IPv4-mapped IPv6 and shared space', async () => {
@@ -37,6 +54,17 @@ test('the address check refuses internal space, including IPv4-mapped IPv6 and s
       assert.equal(verdict, expectRefused ? 'URL_REJECTED' : 'allowed', address);
     }
   }
+});
+
+test('URL import pins the validated address for the TLS connection', async()=>{
+  let resolutions=0,connected='';
+  const importer=new SafeImporter(1000,1,(async()=>{resolutions++;return[{address:'93.184.216.34',family:4}]}) as any,async(target:any)=>{
+    connected=target.address;
+    return{status:200,headers:{'content-type':'text/plain'},text:'safe response'};
+  });
+  assert.equal(await importer.fetch('https://example.test/article'),'safe response');
+  assert.equal(resolutions,1);
+  assert.equal(connected,'93.184.216.34');
 });
 
 test('a viewer cannot queue a job, and a member on the free plan gets PLAN_REQUIRED', async () => {

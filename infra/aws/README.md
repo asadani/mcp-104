@@ -27,7 +27,9 @@ Steps:
    verification secret of at least 32 characters. Replace the local teaching
    `Identity` provider with your OAuth/OIDC provider adapter. The `/dev/token`,
    `/authorize` and `/token` routes are not mounted under `NODE_ENV=production`
-   and must never become an Internet-facing login shortcut.
+   and must never become an Internet-facing login shortcut. If either secret
+   uses a customer-managed KMS key, add narrowly scoped `kms:Decrypt` permission
+   for that key to the instance role before deployment.
 3. Provision the members table for real users. Nothing seeds it in production.
 4. Deploy `template.yaml`, passing `ImageUri`, `DatabaseSecretArn`,
    `TokenSecretArn` and `PublicOrigin`.

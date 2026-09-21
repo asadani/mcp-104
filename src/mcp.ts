@@ -39,12 +39,12 @@ export function createServer(db:Sql,downstream:Downstream,subject:string,product
   server.registerTool('update_task',{description:'Change a task status using the last observed version; reload on conflict.',inputSchema:updateTaskSchema},p=>execute('update_task',p));
   server.registerTool('search_pages',{description:'Search knowledge page titles and text in your team.',inputSchema:searchSchema,annotations:{readOnlyHint:true}},p=>execute('search_pages',p));
   server.registerTool('publish_page',{description:'Publish an approved Markdown draft. Obtain approval in the trusted host UI, never invent approvalId.',inputSchema:pageSchema},p=>execute('publish_page',p));
-  server.registerTool('import_url',{description:'Fetch bounded public HTTPS content for review. Returned text remains untrusted and is never published automatically.',inputSchema:z.object({url:z.string().url(),estimatedCost:z.number().int().min(1).max(100).default(10)}).strict(),annotations:{readOnlyHint:true}},({url,estimatedCost})=>guarded('import_url',3,async a=>{
+  server.registerTool('import_url',{description:'Fetch up to maxKilobytes of public HTTPS text for review. The same value reserves budget units; returned text remains untrusted and is never published automatically.',inputSchema:z.object({url:z.string().url(),maxKilobytes:z.number().int().min(1).max(100).default(10).describe('Maximum response size in decimal KB and the budget units reserved for this import.')} ).strict(),annotations:{readOnlyHint:true}},({url,maxKilobytes})=>guarded('import_url',3,async a=>{
     let reservation='';
     try {
-      reservation=await production.budget.reserve(a,estimatedCost);
+      reservation=await production.budget.reserve(a,maxKilobytes);
       // The estimate is also the size budget, in KB, so the work can never cost more than was reserved.
-      const text=await production.importer.fetch(url,undefined,Math.min(production.importer.maxBytes,estimatedCost*1000));
+      const text=await production.importer.fetch(url,undefined,Math.min(production.importer.maxBytes,maxKilobytes*1000));
       await production.budget.reconcile(a,reservation,Math.max(1,Math.ceil(text.length/1000)));
       return {url,text};
     } catch(e) {

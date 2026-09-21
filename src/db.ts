@@ -6,17 +6,59 @@ import { dirname } from 'node:path';
 
 export interface Sql {
   query<T = Record<string, any>>(sql: string, params?: any[]): Promise<{ rows: T[] }>;
+  transaction<T>(work: (tx: Sql) => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
 export async function openDb(url?: string): Promise<Sql> {
   if (url?.startsWith('postgres')) {
     const pool = new pg.Pool({ connectionString: url });
-    return { query: async <T>(s:string, p?:any[]) => ({ rows: (await pool.query(s,p)).rows as T[] }), close: () => pool.end() };
+    const sql: Sql = {
+      query: async <T>(s:string, p?:any[]) => ({ rows: (await pool.query(s,p)).rows as T[] }),
+      transaction: async <T>(work:(tx:Sql)=>Promise<T>) => {
+        const client=await pool.connect();
+        const tx:Sql={query:async<R>(s:string,p?:any[])=>({rows:(await client.query(s,p)).rows as R[]}),transaction:nested=>nested(tx),close:async()=>{}};
+        try {await client.query('BEGIN');const result=await work(tx);await client.query('COMMIT');return result;}
+        catch(e){await client.query('ROLLBACK');throw e;}
+        finally{client.release();}
+      },
+      close: () => pool.end(),
+    };
+    return sql;
   }
   if (url?.startsWith('file://')) mkdirSync(dirname(url.slice(7)), { recursive: true });
   const db = new PGlite(url);
   await db.waitReady;
-  return { query: (s, p) => db.query(s, p), close: () => db.close() };
+  const sql:Sql={
+    query:(s,p)=>db.query(s,p),
+    transaction:<T>(work:(tx:Sql)=>Promise<T>)=>db.transaction(async pgliteTx=>{
+      const tx:Sql={query:(s,p)=>pgliteTx.query(s,p),transaction:nested=>nested(tx),close:async()=>{}};
+      return work(tx);
+    }),
+    close:()=>db.close(),
+  };
+  return sql;
+}
+
+export async function cleanupOperationalData(db:Sql){
+  await db.transaction(async tx=>{
+    const expired=(await tx.query<{org:string;amount:number}>("UPDATE reservations SET state='expired' WHERE state='reserved' AND expires_at < now() RETURNING org,amount")).rows;
+    const released=new Map<string,number>();
+    for(const row of expired) released.set(row.org,(released.get(row.org)??0)+Number(row.amount));
+    for(const [org,amount] of released) await tx.query('UPDATE usage SET reserved=GREATEST(0,reserved-$1) WHERE org=$2',[amount,org]);
+    await tx.query("DELETE FROM operations WHERE created_at < now() - interval '7 days'");
+    await tx.query('DELETE FROM approvals WHERE expires_at < now()');
+    await tx.query("DELETE FROM audit WHERE created_at < now() - interval '30 days'");
+    await tx.query("DELETE FROM rate_buckets WHERE at < now() - interval '1 day'");
+    await tx.query("DELETE FROM reservations WHERE state IN ('settled','expired') AND expires_at < now() - interval '1 day'");
+    await tx.query("DELETE FROM jobs WHERE expires_at < now()");
+  });
+}
+
+export function startOperationalCleanup(db:Sql,intervalMs=60*60*1000){
+  const run=()=>cleanupOperationalData(db).catch(error=>console.error('Operational cleanup failed',error));
+  void run();
+  const timer=setInterval(run,intervalMs);timer.unref();
+  return()=>clearInterval(timer);
 }
 export async function migrate(db: Sql) {
   // Each statement is safe to rerun; deployment runs migrations before replicas start.
