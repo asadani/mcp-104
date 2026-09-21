@@ -522,16 +522,26 @@ class QwenEngine:
         h.update(str(self._stat).encode("ascii"))
         return self.cache / (h.hexdigest()[:20] + ".npy")
 
-    def _generate(self, batch):
+    # Speech runs near 14 characters a second and the codec at 12 tokens a second,
+    # so about 0.9 tokens a character. Allow twice that. Without a cap a chunk
+    # that never emits its end token runs to the library default, the KV cache
+    # fills a 4 GB card, and the whole render stalls for good (seen twice).
+    TOKENS_PER_CHAR = 1.8
+    TOKEN_SLACK = 80
+    CODEC_HZ = 12
+
+    def _generate(self, batch, _attempt=0):
         import numpy as np
 
         n = len(batch)
+        cap = int(max(len(t) for t in batch) * self.TOKENS_PER_CHAR) + self.TOKEN_SLACK
         try:
             wavs, sr = self.model.generate_voice_clone(
                 text=batch if n > 1 else batch[0],
                 language=["English"] * n if n > 1 else "English",
                 ref_audio=[self.ref] * n if n > 1 else self.ref,
                 ref_text=[self.ref_text] * n if n > 1 else self.ref_text,
+                max_new_tokens=cap,
             )
         except self._torch.cuda.OutOfMemoryError:
             self._torch.cuda.empty_cache()
@@ -549,7 +559,15 @@ class QwenEngine:
                      % (sr, SAMPLE_RATE))
         if n == 1 and not isinstance(wavs, (list, tuple)):
             wavs = [wavs]
-        return [np.asarray(w, dtype="float32").reshape(-1) for w in wavs]
+        outs = [np.asarray(w, dtype="float32").reshape(-1) for w in wavs]
+        # A chunk that used its whole allowance did not stop on its own. Sampling
+        # is random, so try it again by itself, and keep the last attempt.
+        for i, w in enumerate(outs):
+            limit = int(len(batch[i]) * self.TOKENS_PER_CHAR) + self.TOKEN_SLACK
+            if _attempt < 3 and len(w) / SAMPLE_RATE * self.CODEC_HZ >= limit - 3:
+                print("  ! chunk ran to its token limit, retrying: %r" % batch[i][:50], flush=True)
+                outs[i] = self._generate([batch[i]], _attempt + 1)[0]
+        return outs
 
     def say_many(self, texts):
         """Synthesise a list of chunks, reusing anything already on disk."""

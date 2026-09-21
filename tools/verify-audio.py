@@ -24,8 +24,9 @@ import numpy as np
 import soundfile as sf
 
 ROOT = Path(__file__).resolve().parent.parent
-PACE = (115, 205)        # words per minute; Kokoro at 0.9 lands near 170
+PACE = (100, 205)        # words per minute; Kokoro at 0.9 lands near 170, a cloned voice near 125
 MAX_GAP = 1.6            # seconds of near-silence; deliberate pauses are <= 0.85
+MAX_GAP_CLONE = 2.6      # the cloned voice leaves longer natural pauses; the shipped chapters reach 2.4
 SILENT = 0.004           # amplitude below which a 20 ms window counts as silence
 
 
@@ -87,7 +88,7 @@ def main():
             flags.append("clips (peak %.3f)" % peak)
         if peak < 0.05:
             flags.append("nearly silent (peak %.3f)" % peak)
-        if gap > MAX_GAP:
+        if gap > (MAX_GAP_CLONE if "qwen" in folder else MAX_GAP):
             flags.append("silence of %.1f s" % gap)
         if cid not in tracks:
             flags.append("missing from the %s manifest" % page)

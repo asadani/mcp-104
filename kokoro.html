@@ -517,7 +517,7 @@ figure{margin:0}
   <div class="aud-intro" id="aud-intro">
     <button class="btn" id="aud-start">▶ Listen straight through</button>
     <button class="vsw" id="vsw" type="button" role="switch"
-            aria-checked="false" data-go="kokoro.html" title="Switch narration voice">
+            aria-checked="true" data-go="index.html" title="Switch narration voice">
       <span class="vsw-lbl vsw-a">Anuj</span>
       <span class="vsw-track"><span class="vsw-knob"></span></span>
       <span class="vsw-lbl vsw-b">AI</span>
@@ -1294,22 +1294,22 @@ function fingerprint(v) { return sha256(JSON.stringify(canonical(v))); }
 
 /* AUDIO-MANIFEST:BEGIN · written by tools/generate-audio.py · do not hand-edit */
 var AUDIO = {
-  dir: "audio-qwen/",
-  voice: "Anuj Sadani",
-  credit: "Read by Anuj Sadani",
+  dir: "audio-kokoro/",
+  voice: "bm_george+bm_fable",
+  credit: "Synthetic voice, Kokoro-82M",
   tracks: {
-    ch00: { f: "ch00.mp3", d: 164.7 },
-    ch01: { f: "ch01.mp3", d: 164.3 },
-    ch02: { f: "ch02.mp3", d: 171.4 },
-    ch03: { f: "ch03.mp3", d: 174.0 },
-    ch04: { f: "ch04.mp3", d: 186.2 },
-    ch05: { f: "ch05.mp3", d: 171.2 },
-    ch06: { f: "ch06.mp3", d: 171.9 },
-    ch07: { f: "ch07.mp3", d: 190.8 },
-    ch08: { f: "ch08.mp3", d: 183.8 },
-    ch09: { f: "ch09.mp3", d: 161.9 },
-    ch10: { f: "ch10.mp3", d: 210.8 },
-    ch11: { f: "ch11.mp3", d: 56.0 }
+    ch00: { f: "ch00.mp3", d: 145.4 },
+    ch01: { f: "ch01.mp3", d: 146.8 },
+    ch02: { f: "ch02.mp3", d: 146.3 },
+    ch03: { f: "ch03.mp3", d: 150.6 },
+    ch04: { f: "ch04.mp3", d: 172.7 },
+    ch05: { f: "ch05.mp3", d: 151.6 },
+    ch06: { f: "ch06.mp3", d: 155.4 },
+    ch07: { f: "ch07.mp3", d: 170.8 },
+    ch08: { f: "ch08.mp3", d: 164.8 },
+    ch09: { f: "ch09.mp3", d: 152.1 },
+    ch10: { f: "ch10.mp3", d: 177.2 },
+    ch11: { f: "ch11.mp3", d: 54.1 }
   }
 };
 /* AUDIO-MANIFEST:END */

@@ -38,3 +38,25 @@ adaptations, not the page read aloud: numbers as words, initialisms plain
 (`MCP`, `API`) or dotted (`I.A.M.`, `P.K.C.E.`), and a pointer to the interactive
 panels rather than a recital of code or JSON. After a change, run the lint,
 then render only that chapter with `--only 07`.
+
+## The cloned voice
+
+The default edition is read in Anuj's own voice, cloned with Qwen3-TTS
+(Apache-2.0) from a few seconds of his recording. The recording is not in the
+repository (it is exactly what someone would need to clone the voice), so the
+render points at it in a sibling `mcp-101/voice/`:
+
+```sh
+python tools/generate-audio.py --engine qwen --voice "Anuj Sadani" --ref ../mcp-101/voice/reference-short.wav --page index.html
+```
+
+It needs a CUDA GPU and runs at about three times real time, so a course takes
+about an hour and a half. Every synthesised chunk is cached on disk, so an
+interrupted render resumes rather than restarts. Each chunk is also capped at
+about twice the tokens its text needs: without the cap a chunk that never
+emits its end token fills a 4 GB card and stalls the whole render. A chunk that
+hits the cap is retried on its own.
+
+`verify-audio.py audio-qwen index.html` allows longer natural pauses for this
+voice than for the AI one. If it flags a long silence, find the chunk, delete its
+`.npy` in `audio-qwen/.chunks/`, and rerun that chapter with `--only NN --force`.
