@@ -2,8 +2,8 @@
 """
 Check rendered narration without listening to it.
 
-    python tools/verify-audio.py                    # audio-kokoro, kokoro.html or index.html
-    python tools/verify-audio.py audio-qwen index.html
+    python tools/verify-audio.py                    # audio-kokoro, index.html
+    python tools/verify-audio.py audio-qwen author.html
 
 For every script in narration/ it checks that:
   * an mp3 exists and decodes
@@ -54,7 +54,7 @@ def manifest(page):
 def main():
     folder = sys.argv[1] if len(sys.argv) > 1 else "audio-kokoro"
     page = sys.argv[2] if len(sys.argv) > 2 else (
-        "kokoro.html" if (ROOT / "kokoro.html").exists() else "index.html")
+        "author.html" if "qwen" in folder else "index.html")
     out = ROOT / folder
     problems, total, size = [], 0.0, 0
     _dir, tracks = manifest(page)

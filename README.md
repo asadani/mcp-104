@@ -12,7 +12,7 @@ Node 22+. Every experiment is deterministic and needs no model key.
 
 Read the hosted course at **[tech.anujsadani.in/mcp-104](https://tech.anujsadani.in/mcp-104/)**. The repository root is the tutorial page, a single self-contained `index.html` in the same format as MCP 101 (no build step; every JSON-RPC frame on it was captured from this repository’s running server, and every code excerpt is pulled from `src/`); the runnable economics lab remains available locally at `http://127.0.0.1:5173/app.html`.
 
-Every chapter can also be listened to: about 33 minutes of narration, one track per chapter, read by Anuj by default. A switch beside *Listen straight through* flips to an AI voice (Kokoro-82M, about 30 minutes) on `kokoro.html`. The scripts are in `narration/`, and `tools/README.md` explains how the audio is made.
+Every chapter can also be listened to: about 30 minutes of narration, one track per chapter, in an AI voice (Kokoro-82M) by default. A switch beside *Listen straight through* flips to Anuj's own voice (about 33 minutes) on `author.html`, and the page remembers the choice as you move between the courses. The scripts are in `narration/`, and `tools/README.md` explains how the audio is made.
 
 ## Run
 

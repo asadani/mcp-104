@@ -9,15 +9,16 @@ option.
 | Script | What it does |
 |---|---|
 | `lint-narration.py` | Checks the scripts before rendering: one per chapter, the right opening line, a sensible length, nothing that does not read aloud (digits, symbols, identifiers), no initialism the pronunciation tables do not know. |
-| `generate-audio.py` | Renders each script with Kokoro-82M into `audio-kokoro/chNN.mp3`, and writes the durations into the page between the `AUDIO-MANIFEST` markers. Reruns skip chapters whose script has not changed. |
+| `generate-audio.py` | Renders each script with Kokoro-82M into `audio-kokoro/chNN.mp3` (or the cloned voice into `audio-qwen/`), and writes the durations into `index.html` (or `author.html`) between the `AUDIO-MANIFEST` markers. Reruns skip chapters whose script has not changed. |
 | `verify-audio.py` | Checks the result without listening: every mp3 decodes, its length fits its script, nothing clips, no long silence, and the page's manifest agrees with the files. |
 
 ## Rendering
 
 ```sh
 python tools/lint-narration.py
-python tools/generate-audio.py --engine kokoro --device cuda --voice "bm_george+bm_fable" --page index.html
-python tools/verify-audio.py audio-kokoro index.html
+python tools/generate-audio.py --engine kokoro --device cuda --voice "bm_george+bm_fable"
+python tools/verify-audio.py audio-kokoro index.html     # the AI voice
+python tools/verify-audio.py audio-qwen author.html      # the cloned voice
 ```
 
 `--device cuda` needs `onnxruntime-gpu` and the `nvidia-*` CUDA wheels in the
@@ -41,13 +42,13 @@ then render only that chapter with `--only 07`.
 
 ## The cloned voice
 
-The default edition is read in Anuj's own voice, cloned with Qwen3-TTS
+The author edition (`author.html`) is read in Anuj's own voice, cloned with Qwen3-TTS
 (Apache-2.0) from a few seconds of his recording. The recording is not in the
 repository (it is exactly what someone would need to clone the voice), so the
 render points at it in a sibling `mcp-101/voice/`:
 
 ```sh
-python tools/generate-audio.py --engine qwen --voice "Anuj Sadani" --ref ../mcp-101/voice/reference-short.wav --page index.html
+python tools/generate-audio.py --engine qwen --voice "Anuj Sadani" --ref ../mcp-101/voice/reference-short.wav
 ```
 
 It needs a CUDA GPU and runs at about three times real time, so a course takes
@@ -57,6 +58,6 @@ about twice the tokens its text needs: without the cap a chunk that never
 emits its end token fills a 4 GB card and stalls the whole render. A chunk that
 hits the cap is retried on its own.
 
-`verify-audio.py audio-qwen index.html` allows longer natural pauses for this
+`verify-audio.py audio-qwen author.html` allows longer natural pauses for this
 voice than for the AI one. If it flags a long silence, find the chunk, delete its
 `.npy` in `audio-qwen/.chunks/`, and rerun that chapter with `--only NN --force`.

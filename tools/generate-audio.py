@@ -39,12 +39,12 @@ AUDIO = ROOT / "audio-kokoro"
 MODELS = Path(os.environ["KOKORO_MODELS"]) if os.environ.get("KOKORO_MODELS") else (
     ROOT / "models" if (ROOT / "models").exists()
     else ROOT.parent / "mcp-101" / "models")
-# Each narration has its own page. The default edition is the one in my
-# own voice; the Kokoro edition is the alternative.
+# Each narration has its own page. index.html is the AI voice, the default a
+# reader lands on; author.html is the edition in my own voice.
 # engine -> (page, credit line). The credit names who is reading rather
 # than how the audio was produced, which is not the reader's problem.
-PAGES = {"qwen":       ("index.html", "Read by Anuj Sadani"),
-         "kokoro":     ("kokoro.html", "Synthetic voice, Kokoro-82M"),
+PAGES = {"qwen":       ("author.html", "Read by Anuj Sadani"),
+         "kokoro":     ("index.html", "Synthetic voice, Kokoro-82M"),
          "chatterbox": ("chatterbox.html", "Synthetic voice, Chatterbox")}
 
 MODEL_BASE = ("https://github.com/thewh1teagle/kokoro-onnx/releases/download/"
